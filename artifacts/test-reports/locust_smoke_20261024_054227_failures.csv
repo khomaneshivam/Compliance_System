@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,Master Data: List Authorities,"ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)",1,2026-10-24T05:42:52Z,2026-10-24T05:42:52Z
