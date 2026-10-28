@@ -191,6 +191,13 @@ class RuleCreateRequest(BaseModel):
     fail_explanation_template: str = Field(..., description="Template interpolated when rule evaluates to FALSE")
     effective_from: Optional[date] = Field(default_factory=date.today)
     change_rationale: Optional[str] = Field(None, description="Regulatory rationale for this rule version")
+    publication_date: Optional[date] = Field(None, description="Official publication date of notification or gazette")
+    instrument_identifier: Optional[str] = Field(None, description="Official Gazette notification or statutory instrument number")
+    clause_reference: Optional[str] = Field(None, description="Specific Section or Rule clause reference")
+    official_source_url: Optional[str] = Field(None, description="Official government gazette or portal URL")
+    source_document_id: Optional[str] = Field(None, description="ID of source regulatory document in intel vault")
+    source_fingerprint: Optional[str] = Field(None, description="SHA-256 fingerprint of official source document")
+    source_verification_status: Optional[str] = Field("PROPOSED", description="PROPOSED, VERIFIED, or UNVERIFIED_DEMO")
 
 
 class RuleResponse(BaseModel):
@@ -207,6 +214,13 @@ class RuleResponse(BaseModel):
     effective_to: Optional[date] = None
     change_rationale: Optional[str] = None
     approved_at: Optional[datetime] = None
+    publication_date: Optional[date] = None
+    instrument_identifier: Optional[str] = None
+    clause_reference: Optional[str] = None
+    official_source_url: Optional[str] = None
+    source_document_id: Optional[str] = None
+    source_fingerprint: Optional[str] = None
+    source_verification_status: str = "UNVERIFIED_DEMO"
 
     model_config = {"from_attributes": True}
 
@@ -217,6 +231,13 @@ class RuleSupersedeRequest(BaseModel):
     fail_explanation_template: str
     change_rationale: str = Field(..., description="Mandatory rationale for why this rule supersedes previous version")
     effective_from: Optional[date] = Field(default_factory=date.today)
+    publication_date: Optional[date] = None
+    instrument_identifier: Optional[str] = None
+    clause_reference: Optional[str] = None
+    official_source_url: Optional[str] = None
+    source_document_id: Optional[str] = None
+    source_fingerprint: Optional[str] = None
+    source_verification_status: Optional[str] = None
 
 
 # ------------------------------------------------------------------------------

@@ -31,6 +31,7 @@ class DocumentAIExtractionOutput(BaseModel):
     document_type_detected: str
     confidence_score: float
     provider_name: str
+    provider_mode: str = "FIXTURE"  # FIXTURE, LIVE_OCR, DISABLED, FAILED
     model_version: str
     schema_version: str = "v1.0"
     extracted_at: datetime
@@ -76,6 +77,8 @@ class DocumentUploadResponse(BaseModel):
     page_count: int
     storage_key: str
     extraction_status: str
+    extraction_provider_mode: str = "FIXTURE"  # FIXTURE, LIVE_OCR, DISABLED, FAILED
+    error_category: Optional[str] = None
     review_status: str
     is_duplicate: bool
     duplicate_of_id: Optional[str] = None
@@ -104,7 +107,9 @@ class DocumentDetailResponse(BaseModel):
     storage_key: str
     document_type_detected: Optional[str] = None
     extraction_status: str
+    extraction_provider_mode: str = "FIXTURE"  # FIXTURE, LIVE_OCR, DISABLED, FAILED
     extraction_error: Optional[str] = None
+    error_category: Optional[str] = None
     extracted_metadata: Optional[Dict[str, Any]] = None
     review_status: str
     detected_issue_date: Optional[date] = None

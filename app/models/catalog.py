@@ -3,10 +3,13 @@ Master Regulatory Catalog Models
 """
 
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from sqlalchemy import String, Integer, Boolean, Date, DateTime, ForeignKey, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel
+
+if TYPE_CHECKING:
+    from app.models.regulatory_intel import RegulatoryDocument
 
 
 class RegulatoryAuthority(TimestampedModel):
@@ -72,8 +75,18 @@ class ApplicabilityRule(TimestampedModel):
     approved_by_user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
+    # Regulatory Provenance & Gazette Traceability
+    publication_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    instrument_identifier: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g., Gazette Notification S.O. 1234(E)
+    clause_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g., Section 25, Water Act 1974
+    official_source_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    source_document_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("regulatory_documents.id", ondelete="SET NULL"), nullable=True)
+    source_fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # SHA-256 hash of official source document
+    source_verification_status: Mapped[str] = mapped_column(String(50), default="UNVERIFIED_DEMO", nullable=False)  # UNVERIFIED_DEMO, PROPOSED, VERIFIED
+
     # Relationships
     statutory_requirement: Mapped["StatutoryRequirement"] = relationship("StatutoryRequirement", back_populates="rules")
+    source_document: Mapped[Optional["RegulatoryDocument"]] = relationship("RegulatoryDocument", foreign_keys=[source_document_id])
 
     __table_args__ = (
         UniqueConstraint("statutory_requirement_id", "rule_version", name="uq_requirement_rule_version"),

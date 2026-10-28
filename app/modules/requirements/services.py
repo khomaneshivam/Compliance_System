@@ -15,7 +15,7 @@ from app.models.catalog import StatutoryRequirement, RegulatoryAct, RegulatoryAu
 from app.models.master_data import Jurisdiction
 from app.models.documents import ComplianceDocument
 from app.models.tasks import ComplianceTask, AuditLog
-from app.models.assessments import ProposedRequirementChange
+from app.models.assessments import AssessmentRun, AssessmentFinding, ProposedRequirementChange
 from app.modules.requirements.schemas import (
     RequirementItemResponse,
     PaginatedRequirementsResponse,
@@ -201,7 +201,29 @@ class RequirementsService:
         act = stat.act if stat else None
         auth = act.authority if act else None
 
-        # 1. Statutory Provenance
+        # 1. Statutory Provenance & Rule Association
+        rule = db.get(ApplicabilityRule, req.rule_version_id) if req.rule_version_id else None
+        rule_ver = rule.rule_version if rule else 1
+
+        section_clause = (
+            rule.clause_reference
+            if (rule and rule.clause_reference)
+            else (f"Section 25/26" if "consent" in (stat.title or "").lower() else "Section 7/8")
+        )
+        gazette_ref = (
+            rule.instrument_identifier
+            if (rule and rule.instrument_identifier)
+            else (f"Gazette Notification Pending" if rule else None)
+        )
+        source_url = (
+            rule.official_source_url
+            if (rule and rule.official_source_url)
+            else (f"https://{auth.code.lower() if auth else 'mpcb'}.gov.in/statutes")
+        )
+        pub_date = rule.publication_date if rule else None
+        source_status = rule.source_verification_status if rule else "UNVERIFIED_DEMO"
+        is_verified = source_status == "VERIFIED"
+
         provenance = StatutoryProvenance(
             authority_code=auth.code if auth else None,
             authority_name=auth.name if auth else None,
@@ -209,18 +231,36 @@ class RequirementsService:
             act_short_name=act.short_name if act else None,
             act_year=act.year if act else None,
             jurisdiction=req.plant.jurisdiction if req.plant else None,
-            section_clause=f"Section 25/26" if "consent" in (stat.title or "").lower() else "Section 7/8",
-            gazette_reference="Notification No. S.O. 1234(E) / Government of Maharashtra Gazette",
-            official_source_url=f"https://{auth.code.lower() if auth else 'mpcb'}.gov.in/statutes",
+            jurisdiction_level=auth.jurisdiction_level if auth else "STATE",
+            section_clause=section_clause,
+            gazette_reference=gazette_ref,
+            official_source_url=source_url,
+            publication_date=pub_date,
+            source_verification_status=source_status,
+            source_fingerprint=rule.source_fingerprint if rule else None,
+            instrument_identifier=gazette_ref,
+            is_verified=is_verified,
         )
 
-        # 2. Applicability Provenance
-        rule = db.get(ApplicabilityRule, req.rule_version_id) if req.rule_version_id else None
-        rule_ver = rule.rule_version if rule else 1
+        # 2. Applicability Provenance & Finding Trace
+        finding = db.scalars(
+            select(AssessmentFinding)
+            .join(AssessmentRun, AssessmentRun.id == AssessmentFinding.assessment_run_id)
+            .where(
+                and_(
+                    AssessmentRun.plant_id == req.plant_id,
+                    AssessmentFinding.statutory_requirement_id == req.statutory_requirement_id,
+                )
+            )
+            .order_by(AssessmentFinding.created_at.desc())
+        ).first()
 
-        profile = req.plant.profile
-        matched_facts: Dict[str, Any] = {}
-        if profile:
+        condition_trace = finding.condition_results if finding else {}
+        missing_facts = finding.missing_facts if finding else []
+        matched_facts = finding.matched_facts if finding else {}
+
+        if not matched_facts and req.plant and req.plant.profile:
+            profile = req.plant.profile
             matched_facts = {
                 "industry_category": profile.industry_category,
                 "boiler_count": profile.boiler_count,
@@ -234,7 +274,8 @@ class RequirementsService:
             applicability_rationale=req.applicability_rationale,
             rule_version=rule_ver,
             matched_facts=matched_facts,
-            missing_facts=[],
+            missing_facts=missing_facts,
+            condition_trace=condition_trace,
             last_evaluated_at=req.last_evaluated_at,
         )
 

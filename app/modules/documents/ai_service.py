@@ -39,6 +39,7 @@ class MockSyntheticDocumentAIProvider(DocumentAIProvider):
 
     def __init__(self, model_version: str = "PlantProof-VisionExtractor v1.4"):
         self.model_version = model_version
+        self.provider_mode = "FIXTURE"
         self.extractor_helper = DocumentTextExtractor()
 
     def extract_document(
@@ -280,6 +281,7 @@ class MockSyntheticDocumentAIProvider(DocumentAIProvider):
             document_type_detected=doc_type,
             confidence_score=confidence,
             provider_name="PlantProof-VisionExtractor",
+            provider_mode=self.provider_mode,
             model_version=self.model_version,
             schema_version="v1.0",
             extracted_at=extracted_at,

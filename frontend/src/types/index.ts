@@ -97,6 +97,7 @@ export interface RegulatorySource {
   authority_name: string;
   jurisdiction: string;
   adapter_type: string;
+  adapter_mode?: 'FIXTURE' | 'LIVE_HTTP' | 'DISABLED' | 'FAILED';
   url: string;
   update_frequency: string;
   expected_format: string;
@@ -106,6 +107,7 @@ export interface RegulatorySource {
   last_successful_check_at: string | null;
   consecutive_failures: number;
   error_message: string | null;
+  error_category?: string | null;
   is_active: boolean;
 }
 
@@ -120,6 +122,7 @@ export interface RegulatoryChangeReview {
   id: string;
   source_id: string;
   source_name?: string;
+  source_adapter_mode?: 'FIXTURE' | 'LIVE_HTTP' | 'DISABLED' | 'FAILED';
   document_id: string | null;
   target_requirement_code: string | null;
   notification_number: string;
@@ -145,6 +148,7 @@ export interface RegulatoryChangeReview {
   published_rule_id: string | null;
   superseded_rule_id: string | null;
 }
+
 
 export interface RegulatoryChangeImpact {
   id: string;
@@ -210,7 +214,9 @@ export interface ComplianceDocumentItem {
   storage_key?: string;
   document_type_detected: string | null;
   extraction_status: 'QUEUED' | 'EXTRACTING' | 'EXTRACTED' | 'EXTRACTION_FAILED';
+  extraction_provider_mode?: 'FIXTURE' | 'LIVE_OCR' | 'DISABLED' | 'FAILED';
   extraction_error?: string | null;
+  error_category?: string | null;
   review_status: 'PENDING_REVIEW' | 'APPROVED' | 'EDITED_AND_APPROVED' | 'REJECTED';
   detected_issue_date: string | null;
   detected_expiry_date: string | null;
@@ -226,6 +232,7 @@ export interface ComplianceDocumentItem {
   linked_requirements?: LinkedRequirementItem[];
   created_at: string;
 }
+
 
 export interface DocumentAuditLogItem {
   id: string;
@@ -247,7 +254,15 @@ export interface StatutoryProvenance {
   authority_name: string | null;
   jurisdiction_name: string | null;
   jurisdiction_level: string | null;
+  section_clause?: string | null;
+  gazette_reference?: string | null;
   official_gazette_ref?: string | null;
+  official_source_url?: string | null;
+  publication_date?: string | null;
+  source_verification_status?: string | null;
+  source_fingerprint?: string | null;
+  instrument_identifier?: string | null;
+  is_verified?: boolean;
 }
 
 export interface EvidenceSummaryItem {
@@ -269,6 +284,7 @@ export interface ApplicabilityProvenance {
   rule_version: number;
   matched_facts: Record<string, unknown>;
   missing_facts: string[];
+  condition_trace?: Record<string, unknown>;
   last_evaluated_at: string;
 }
 

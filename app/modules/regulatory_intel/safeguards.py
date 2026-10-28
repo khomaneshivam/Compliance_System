@@ -290,3 +290,27 @@ def _month_name_to_int(month_str: str) -> Optional[int]:
         "dec": 12, "december": 12,
     }
     return months.get(month_str.lower().strip())
+
+
+def sanitize_source_error(exc: Exception) -> Tuple[str, str]:
+    """
+    Sanitizes raw ingestion exceptions into customer-facing error categories and human-friendly messages.
+    Guarantees no raw machine stack traces, database dumps, or local file paths leak to users.
+    Returns: (error_category, clean_error_message)
+    """
+    if isinstance(exc, FileSizeExceededError):
+        return ("PAYLOAD_OVERSIZED", "Document size exceeds the 25 MB safety limit.")
+    if isinstance(exc, MalformedFileError):
+        return ("MALFORMED_STREAM", "Source document stream is damaged or contains invalid binary headers.")
+    if isinstance(exc, IngestionSecurityError):
+        return ("SECURITY_BLOCKED", "Source document rejected by security boundary (SSRF or disallowed file type).")
+    if isinstance(exc, TimeoutError) or "timeout" in str(exc).lower():
+        return ("TIMEOUT", "Source portal request timed out after 30 seconds.")
+    if isinstance(exc, (ConnectionError, socket.error)) or "connection" in str(exc).lower() or "unreachable" in str(exc).lower():
+        return ("NETWORK_UNREACHABLE", "Portal network connection failed or server unreachable.")
+    if isinstance(exc, SourceUnavailableError) or "503" in str(exc) or "throttle" in str(exc).lower() or "rate limit" in str(exc).lower():
+        return ("SERVICE_THROTTLED", "Regulatory portal reported service unavailable (503) or rate-limit throttle.")
+    if "extract" in str(exc).lower() or "parse" in str(exc).lower():
+        return ("EXTRACTION_PARSE_ERROR", "Document text structure could not be parsed into recognized compliance parameters.")
+    return ("INTERNAL_PROCESSING_ERROR", "An unexpected processing error occurred during automated ingestion.")
+

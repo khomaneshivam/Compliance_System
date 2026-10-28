@@ -24,7 +24,9 @@ from app.modules.documents.safeguards import (
     compute_sha256,
     sanitize_filename,
     DocumentSecurityError,
+    sanitize_document_error,
 )
+
 from app.modules.documents.storage import vault_storage
 from app.modules.documents.extractors import DocumentTextExtractor
 from app.modules.documents.ai_service import ai_extractor_provider, DocumentAIExtractionOutput
@@ -222,6 +224,7 @@ class DocumentProcessingPipeline:
             doc.extraction_error = None
             doc.extracted_metadata = {
                 "provider": extraction_output.provider_name,
+                "provider_mode": getattr(extraction_output, "provider_mode", "FIXTURE"),
                 "model_version": extraction_output.model_version,
                 "schema_version": extraction_output.schema_version,
                 "has_expiry": extraction_output.has_expiry,
@@ -236,6 +239,7 @@ class DocumentProcessingPipeline:
                 details={
                     "document_type": extraction_output.document_type_detected,
                     "confidence_score": extraction_output.confidence_score,
+                    "provider_mode": getattr(extraction_output, "provider_mode", "FIXTURE"),
                     "fields_count": len(extraction_output.fields),
                     "checks_count": len(extraction_output.validation_checks),
                     "detected_expiry_date": extraction_output.detected_expiry_date.isoformat() if extraction_output.detected_expiry_date else None,
@@ -246,17 +250,23 @@ class DocumentProcessingPipeline:
             return doc
 
         except Exception as e:
+            category, clean_error = sanitize_document_error(e)
             doc.extraction_status = "EXTRACTION_FAILED"
-            doc.extraction_error = str(e)
+            doc.extraction_error = clean_error
+            metadata = dict(doc.extracted_metadata or {})
+            metadata["error_category"] = category
+            metadata["provider_mode"] = "FAILED"
+            doc.extracted_metadata = metadata
             self._record_audit(
                 db=db,
                 document_id=doc.id,
                 action="EXTRACTION_FAILED",
                 performed_by=user_email,
-                details={"error": str(e)},
+                details={"error_category": category, "error": clean_error},
             )
             db.commit()
             return doc
+
 
     def update_field_values(
         self,

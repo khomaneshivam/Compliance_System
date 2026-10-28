@@ -15,6 +15,7 @@ class SourceResponse(BaseModel):
     source_type: str
     url: str
     adapter_type: str
+    adapter_mode: str = "FIXTURE"  # FIXTURE, LIVE_HTTP, DISABLED, FAILED
     scrape_frequency: str
     rate_limit_per_minute: int
     health_status: str
@@ -22,6 +23,7 @@ class SourceResponse(BaseModel):
     last_successful_check_at: Optional[datetime] = None
     consecutive_failures: int
     error_message: Optional[str] = None
+    error_category: Optional[str] = None
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -32,10 +34,12 @@ class SourceHealthResponse(BaseModel):
     code: str
     name: str
     health_status: str
+    adapter_mode: str = "FIXTURE"  # FIXTURE, LIVE_HTTP, DISABLED, FAILED
     consecutive_failures: int
     last_checked_at: Optional[datetime] = None
     last_successful_check_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    error_category: Optional[str] = None
     total_documents_ingested: int
     pending_change_reviews: int
 
@@ -50,6 +54,7 @@ class EvidenceSnippetSchema(BaseModel):
 class ChangeReviewItemResponse(BaseModel):
     id: str
     source_code: str
+    source_adapter_mode: str = "FIXTURE"  # FIXTURE, LIVE_HTTP, DISABLED, FAILED
     notification_number: str
     title: str
     published_date: Optional[date] = None
@@ -68,6 +73,7 @@ class ChangeReviewDetailResponse(BaseModel):
     id: str
     source_id: str
     source_code: str
+    source_adapter_mode: str = "FIXTURE"  # FIXTURE, LIVE_HTTP, DISABLED, FAILED
     document_id: Optional[str] = None
     statutory_requirement_id: Optional[str] = None
     statutory_requirement_code: Optional[str] = None
@@ -96,6 +102,7 @@ class ChangeReviewDetailResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
 
 
 class ChangeReviewDraftUpdateRequest(BaseModel):

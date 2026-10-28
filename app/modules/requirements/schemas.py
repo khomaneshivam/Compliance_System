@@ -14,9 +14,15 @@ class StatutoryProvenance(BaseModel):
     act_short_name: Optional[str] = None
     act_year: Optional[int] = None
     jurisdiction: Optional[str] = None
+    jurisdiction_level: Optional[str] = None
     section_clause: Optional[str] = None
     gazette_reference: Optional[str] = None
     official_source_url: Optional[str] = None
+    publication_date: Optional[date] = None
+    source_verification_status: str = "UNVERIFIED_DEMO"
+    source_fingerprint: Optional[str] = None
+    instrument_identifier: Optional[str] = None
+    is_verified: bool = False
 
 
 class EvidenceSummary(BaseModel):
@@ -39,6 +45,7 @@ class ApplicabilityProvenance(BaseModel):
     rule_version: int = 1
     matched_facts: Dict[str, Any] = Field(default_factory=dict)
     missing_facts: List[str] = Field(default_factory=list)
+    condition_trace: Dict[str, Any] = Field(default_factory=dict)
     last_evaluated_at: datetime
 
 

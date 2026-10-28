@@ -187,3 +187,78 @@ def test_nested_boolean_tree_with_template(engine: ApplicabilityEngine):
     assert "45.0 KLD effluent discharge" in outcome.explanation
     assert outcome.matched_facts["industry_category"] == "RED"
     assert outcome.matched_facts["effluent_discharge_kld"] == 45.0
+
+
+# ------------------------------------------------------------------------------
+# 6. Type Mismatch & Kleene Indeterminacy Hardening (Cardinal Regulatory Safety)
+# ------------------------------------------------------------------------------
+
+def test_type_mismatch_evaluates_to_unknown_never_false(engine: ApplicabilityEngine):
+    """
+    REGULATORY SAFETY REQUIREMENT:
+    If a plant fact contains an incompatible type (e.g. string 'high' instead of numeric 0),
+    the comparison MUST return UNKNOWN / NEEDS_REVIEW, NEVER silently evaluate to FALSE
+    which would falsely declare the plant exempt.
+    """
+    ast = {"field": "steam_capacity_tph", "operator": "gt", "value": 0.0}
+
+    # Passing string 'high' instead of float
+    outcome = engine.evaluate_rule(ast, {"steam_capacity_tph": "high"})
+    assert outcome.status == "NEEDS_REVIEW"
+    assert outcome.raw_result == EvalResult.UNKNOWN
+    assert "steam_capacity_tph" in outcome.missing_facts
+    assert "Type mismatch or invalid value" in outcome.condition_trace.get("error", "")
+
+
+def test_boolean_with_numeric_operator_returns_unknown(engine: ApplicabilityEngine):
+    """
+    Python bool is a subclass of int (True == 1). A boolean flag must not
+    silently evaluate as numeric threshold for boiler capacity or waste tonnage.
+    """
+    ast = {"field": "has_boiler", "operator": "gt", "value": 0.0}
+    outcome = engine.evaluate_rule(ast, {"has_boiler": True})
+    assert outcome.status == "NEEDS_REVIEW"
+    assert outcome.raw_result == EvalResult.UNKNOWN
+
+
+def test_empty_condition_group_evaluates_to_needs_review(engine: ApplicabilityEngine):
+    """
+    An empty rule condition group (empty AND or OR) is a malformed rule definition.
+    It must yield NEEDS_REVIEW and not silently evaluate to TRUE or FALSE.
+    """
+    ast_empty_and = {"operator": "AND", "rules": []}
+    outcome_and = engine.evaluate_rule(ast_empty_and, {"jurisdiction": "Maharashtra"})
+    assert outcome_and.status == "NEEDS_REVIEW"
+    assert outcome_and.raw_result == EvalResult.UNKNOWN
+
+    ast_empty_or = {"operator": "OR", "rules": []}
+    outcome_or = engine.evaluate_rule(ast_empty_or, {"jurisdiction": "Maharashtra"})
+    assert outcome_or.status == "NEEDS_REVIEW"
+    assert outcome_or.raw_result == EvalResult.UNKNOWN
+
+
+def test_empty_ast_node_evaluates_to_needs_review(engine: ApplicabilityEngine):
+    """Empty AST node `{}` must safely evaluate to NEEDS_REVIEW."""
+    outcome = engine.evaluate_rule({}, {"jurisdiction": "Maharashtra"})
+    assert outcome.status == "NEEDS_REVIEW"
+    assert outcome.raw_result == EvalResult.UNKNOWN
+
+
+def test_kleene_and_with_true_and_type_mismatch(engine: ApplicabilityEngine):
+    """
+    In an AND group: TRUE and TYPE_MISMATCH(UNKNOWN) must evaluate to UNKNOWN (NEEDS_REVIEW).
+    Before hardening, type mismatch returned False which turned the whole AND group False!
+    """
+    ast = {
+        "operator": "AND",
+        "rules": [
+            {"field": "jurisdiction", "operator": "eq", "value": "Maharashtra"},
+            {"field": "steam_capacity_tph", "operator": "gt", "value": 0.0},
+        ]
+    }
+    # Jurisdiction matches (TRUE), steam_capacity_tph is invalid string (UNKNOWN)
+    outcome = engine.evaluate_rule(ast, {"jurisdiction": "Maharashtra", "steam_capacity_tph": "invalid"})
+    assert outcome.status == "NEEDS_REVIEW"
+    assert outcome.raw_result == EvalResult.UNKNOWN
+    assert "steam_capacity_tph" in outcome.missing_facts
+

@@ -50,11 +50,14 @@ class TriggerSchedulerResponse(BaseModel):
     scan_date: date
     scanned_tasks_count: int
     scanned_requirements_count: int
+    scanned_documents_count: int = 0
+    scanned_changes_count: int = 0
     generated_count: int
     deduplicated_count: int
 
 
 class TestNotificationRequest(BaseModel):
+    __test__ = False
     channel: str = Field("IN_APP", pattern="^(IN_APP|EMAIL)$")
     notification_type: str = Field("TEST", min_length=2, max_length=50)
     title: str = Field(..., min_length=3, max_length=255)

@@ -513,7 +513,7 @@ def list_rules(
 
 
 def create_rule_version(db: Session, request: RuleCreateRequest, user: User) -> ApplicabilityRule:
-    """Creates a new rule version in PROPOSED status."""
+    """Creates a new rule version in PROPOSED status with full provenance."""
     req = db.scalars(
         select(StatutoryRequirement).where(StatutoryRequirement.code == request.statutory_requirement_code)
     ).first()
@@ -535,15 +535,39 @@ def create_rule_version(db: Session, request: RuleCreateRequest, user: User) -> 
         effective_from=request.effective_from or date.today(),
         change_rationale=request.change_rationale,
         is_immutable=False,
+        publication_date=request.publication_date,
+        instrument_identifier=request.instrument_identifier,
+        clause_reference=request.clause_reference,
+        official_source_url=request.official_source_url,
+        source_document_id=request.source_document_id,
+        source_fingerprint=request.source_fingerprint,
+        source_verification_status=request.source_verification_status or "PROPOSED",
     )
     db.add(rule)
+    db.flush()
+
+    record_audit_log(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        action="RULE_PROPOSED",
+        entity_type="ApplicabilityRule",
+        entity_id=rule.id,
+        new_state={
+            "rule_version": rule.rule_version,
+            "statutory_requirement_code": req.code,
+            "change_rationale": rule.change_rationale,
+            "instrument_identifier": rule.instrument_identifier,
+        },
+    )
+
     db.commit()
     db.refresh(rule)
     return rule
 
 
 def approve_rule(db: Session, rule_id: str, user: User) -> ApplicabilityRule:
-    """Approves a proposed rule version, locking it as immutable."""
+    """Approves a proposed rule version, locking it as immutable with audit provenance."""
     rule = db.get(ApplicabilityRule, rule_id)
     if not rule:
         raise EntityNotFoundError("ApplicabilityRule", rule_id)
@@ -567,6 +591,24 @@ def approve_rule(db: Session, rule_id: str, user: User) -> ApplicabilityRule:
     rule.is_immutable = True
     rule.approved_by_user_id = user.id
     rule.approved_at = datetime.now(timezone.utc)
+    if rule.source_verification_status in ("PROPOSED", "UNVERIFIED_DEMO"):
+        rule.source_verification_status = "VERIFIED"
+
+    record_audit_log(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        action="RULE_APPROVED",
+        entity_type="ApplicabilityRule",
+        entity_id=rule.id,
+        new_state={
+            "rule_version": rule.rule_version,
+            "status": "ACTIVE",
+            "statutory_requirement_id": rule.statutory_requirement_id,
+            "approved_at": rule.approved_at.isoformat() if rule.approved_at else None,
+            "source_verification_status": rule.source_verification_status,
+        },
+    )
 
     db.commit()
     db.refresh(rule)
@@ -574,7 +616,7 @@ def approve_rule(db: Session, rule_id: str, user: User) -> ApplicabilityRule:
 
 
 def supersede_rule(db: Session, rule_id: str, request: RuleSupersedeRequest, user: User) -> ApplicabilityRule:
-    """Supersedes an active rule by creating version N + 1 with review rationale."""
+    """Supersedes an active rule by creating version N + 1 with review rationale and provenance."""
     old_rule = db.get(ApplicabilityRule, rule_id)
     if not old_rule:
         raise EntityNotFoundError("ApplicabilityRule", rule_id)
@@ -594,8 +636,36 @@ def supersede_rule(db: Session, rule_id: str, request: RuleSupersedeRequest, use
         is_immutable=True,
         approved_by_user_id=user.id,
         approved_at=datetime.now(timezone.utc),
+        publication_date=request.publication_date or old_rule.publication_date,
+        instrument_identifier=request.instrument_identifier or old_rule.instrument_identifier,
+        clause_reference=request.clause_reference or old_rule.clause_reference,
+        official_source_url=request.official_source_url or old_rule.official_source_url,
+        source_document_id=request.source_document_id or old_rule.source_document_id,
+        source_fingerprint=request.source_fingerprint or old_rule.source_fingerprint,
+        source_verification_status=request.source_verification_status or "VERIFIED",
     )
     db.add(new_rule)
+    db.flush()
+
+    record_audit_log(
+        db,
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        action="RULE_SUPERSEDED",
+        entity_type="ApplicabilityRule",
+        entity_id=new_rule.id,
+        previous_state={
+            "superseded_rule_id": old_rule.id,
+            "superseded_rule_version": old_rule.rule_version,
+            "superseded_status": "SUPERSEDED",
+        },
+        new_state={
+            "new_rule_version": new_rule.rule_version,
+            "new_status": "ACTIVE",
+            "change_rationale": request.change_rationale,
+        },
+    )
+
     db.commit()
     db.refresh(new_rule)
     return new_rule

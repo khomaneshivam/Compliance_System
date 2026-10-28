@@ -20,7 +20,10 @@ from app.models import Base
 # add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+current_url = config.get_main_option("sqlalchemy.url")
+if not current_url or current_url == "driver://user:pass@localhost/dbname":
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
 
 
 def run_migrations_offline() -> None:

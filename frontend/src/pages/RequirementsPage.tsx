@@ -13,6 +13,7 @@ import {
   History,
   Plus,
   RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '../services/api';
 import type {
@@ -610,6 +611,21 @@ export const RequirementsPage: React.FC = () => {
                       <FileText size={15} style={{ color: '#059669' }} /> Statutory Provenance & Legal Basis
                     </h3>
                     <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '14px', fontSize: '13px' }}>
+                      <div style={{ marginBottom: '10px' }}>
+                        {selectedReq.provenance?.source_verification_status === 'VERIFIED' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+                            ✓ Officially Verified Gazette Instrument
+                          </span>
+                        ) : selectedReq.provenance?.source_verification_status === 'PROPOSED' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc' }}>
+                            ℹ️ Proposed Rule Version (Pending Approval)
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                            ⚠️ Unverified Demo Fixture (Pending Gazette Match)
+                          </span>
+                        )}
+                      </div>
                       <div style={{ marginBottom: '6px' }}>
                         <strong>Governing Act:</strong> {selectedReq.provenance?.act_title || 'N/A'}{' '}
                         {selectedReq.provenance?.act_year ? `(${selectedReq.provenance.act_year})` : ''}
@@ -620,9 +636,37 @@ export const RequirementsPage: React.FC = () => {
                       <div style={{ marginBottom: '6px' }}>
                         <strong>Jurisdiction:</strong> {selectedReq.provenance?.jurisdiction_name || selectedReq.jurisdiction} ({selectedReq.provenance?.jurisdiction_level || 'STATE'})
                       </div>
-                      {selectedReq.provenance?.official_gazette_ref && (
-                        <div>
-                          <strong>Official Gazette Ref:</strong> {selectedReq.provenance.official_gazette_ref}
+                      {(selectedReq.provenance?.instrument_identifier || selectedReq.provenance?.official_gazette_ref || selectedReq.provenance?.gazette_reference) && (
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong>Gazette / Instrument ID:</strong> {selectedReq.provenance.instrument_identifier || selectedReq.provenance.official_gazette_ref || selectedReq.provenance.gazette_reference}
+                        </div>
+                      )}
+                      {selectedReq.provenance?.section_clause && (
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong>Statutory Clause:</strong> {selectedReq.provenance.section_clause}
+                        </div>
+                      )}
+                      {selectedReq.provenance?.publication_date && (
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong>Published Date:</strong> {new Date(selectedReq.provenance.publication_date).toLocaleDateString()}
+                        </div>
+                      )}
+                      {selectedReq.provenance?.official_source_url && (
+                        <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <strong>Official Source:</strong>{' '}
+                          <a
+                            href={selectedReq.provenance.official_source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#059669', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                          >
+                            Official Portal Link <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      )}
+                      {selectedReq.provenance?.source_fingerprint && (
+                        <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed #bbf7d0', fontSize: '11px', color: '#475569' }}>
+                          <strong>SHA-256 Fingerprint:</strong> <code style={{ background: '#f8fafc', padding: '1px 4px', borderRadius: '3px', fontSize: '10px' }}>{selectedReq.provenance.source_fingerprint}</code>
                         </div>
                       )}
                     </div>
@@ -637,7 +681,34 @@ export const RequirementsPage: React.FC = () => {
                       <p style={{ margin: '0 0 8px 0', color: '#1e293b' }}>
                         {selectedReq.applicability?.applicability_rationale || selectedReq.applicability_rationale}
                       </p>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>
+
+                      {selectedReq.applicability?.missing_facts && selectedReq.applicability.missing_facts.length > 0 && (
+                        <div style={{ margin: '8px 0', padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '4px', fontSize: '12px', color: '#92400e' }}>
+                          <strong>⚠️ Missing Company Facts for Evaluation:</strong>
+                          <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {selectedReq.applicability.missing_facts.map((mf: string) => (
+                              <span key={mf} style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: '3px', fontSize: '11px', fontFamily: 'monospace' }}>
+                                {mf}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedReq.applicability?.matched_facts && Object.keys(selectedReq.applicability.matched_facts).length > 0 && (
+                        <div style={{ margin: '8px 0', fontSize: '12px', color: '#475569' }}>
+                          <strong>Evaluated Plant Facts:</strong>
+                          <div style={{ marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {Object.entries(selectedReq.applicability.matched_facts).map(([k, v]) => (
+                              <span key={k} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '2px 6px', borderRadius: '3px', fontSize: '11px' }}>
+                                <strong>{k}:</strong> {String(v)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>
                         Rule Engine Version: <strong>v{selectedReq.applicability?.rule_version || 1}</strong> | Evaluated at:{' '}
                         {selectedReq.last_evaluated_at ? new Date(selectedReq.last_evaluated_at).toLocaleDateString() : 'Baseline'}
                       </div>

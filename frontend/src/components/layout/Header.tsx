@@ -14,8 +14,10 @@ import {
   UserCheck,
   LogOut,
   Menu,
+  Sliders,
+  X,
 } from 'lucide-react';
-import type { User, NotificationItem } from '../../types';
+import type { User, NotificationItem, NotificationPreference } from '../../types';
 import { api } from '../../services/api';
 import { useAuth, DEMO_USERS } from '../../context/AuthContext';
 
@@ -36,6 +38,10 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAiAssistant, onToggl
   const [showUserDropdown, setShowUserDropdown] = useState<boolean>(false);
   const [showPlantDropdown, setShowPlantDropdown] = useState<boolean>(false);
   const [scanning, setScanning] = useState<boolean>(false);
+  const [showPreferencesModal, setShowPreferencesModal] = useState<boolean>(false);
+  const [preferences, setPreferences] = useState<NotificationPreference | null>(null);
+  const [savingPreferences, setSavingPreferences] = useState<boolean>(false);
+  const [prefMessage, setPrefMessage] = useState<string | null>(null);
 
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -142,6 +148,54 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAiAssistant, onToggl
       fetchNotifications();
     } catch (err: unknown) {
       alert((err as Error).message || 'Failed to dispatch test notification.');
+    }
+  };
+
+  const fetchPreferences = useCallback(async () => {
+    try {
+      const data = await api.getNotificationPreferences();
+      setPreferences(data);
+    } catch (err) {
+      console.error('Failed to load notification preferences', err);
+    }
+  }, []);
+
+  const handleOpenPreferences = () => {
+    fetchPreferences();
+    setShowPreferencesModal(true);
+    setShowNotifications(false);
+  };
+
+  const handleSavePreferences = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!preferences) return;
+    setSavingPreferences(true);
+    setPrefMessage(null);
+    try {
+      const updated = await api.updateNotificationPreferences(preferences);
+      setPreferences(updated);
+      setPrefMessage('Notification preferences updated successfully.');
+      setTimeout(() => setPrefMessage(null), 3000);
+    } catch (err) {
+      alert((err as Error).message || 'Failed to update preferences.');
+    } finally {
+      setSavingPreferences(false);
+    }
+  };
+
+  const handleNotificationClick = async (item: NotificationItem) => {
+    if (item.status === 'UNREAD') {
+      await handleMarkSingleRead(item.id);
+    }
+    setShowNotifications(false);
+    if (item.entity_type === 'TASK') {
+      navigate('/tasks');
+    } else if (item.entity_type === 'REQUIREMENT') {
+      navigate('/requirements');
+    } else if (item.entity_type === 'DOCUMENT') {
+      navigate('/documents');
+    } else if (item.entity_type === 'REGULATORY_CHANGE') {
+      navigate('/regulatory-changes');
     }
   };
 
@@ -467,22 +521,44 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAiAssistant, onToggl
                     </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#a7f3d0',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        padding: 0,
+                      }}
+                    >
+                      Mark all read
+                    </button>
+                  )}
                   <button
-                    onClick={handleMarkAllRead}
+                    onClick={handleOpenPreferences}
+                    title="Configure notification preferences"
                     style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#a7f3d0',
+                      background: 'rgba(255, 255, 255, 0.12)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      borderRadius: '4px',
+                      color: '#ffffff',
                       fontSize: '11px',
-                      fontWeight: 500,
+                      fontWeight: 600,
                       cursor: 'pointer',
-                      padding: 0,
+                      padding: '3px 8px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
                     }}
                   >
-                    Mark all read
+                    <Sliders size={11} />
+                    <span>Preferences</span>
                   </button>
-                )}
+                </div>
               </div>
 
               <div
@@ -548,7 +624,8 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAiAssistant, onToggl
                     return (
                       <div
                         key={item.id}
-                        onClick={() => handleMarkSingleRead(item.id)}
+                        onClick={() => handleNotificationClick(item)}
+                        title={item.entity_type ? `Navigate to ${item.entity_type.toLowerCase()}` : undefined}
                         style={{
                           padding: '12px 16px',
                           borderBottom: '1px solid #f1f5f9',
@@ -557,6 +634,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAiAssistant, onToggl
                           display: 'flex',
                           gap: '12px',
                           alignItems: 'flex-start',
+                          transition: 'background-color 0.15s ease',
                         }}
                       >
                         <div style={{ flexShrink: 0, marginTop: '2px' }}>
@@ -746,6 +824,351 @@ export const Header: React.FC<HeaderProps> = ({ user, onOpenAiAssistant, onToggl
           )}
         </div>
       </div>
+
+      {/* Alert & Notification Preferences Modal */}
+      {showPreferencesModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notif-pref-modal-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPreferencesModal(false);
+          }}
+        >
+          <div
+            style={{
+              width: '480px',
+              maxWidth: '100%',
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 20px 45px rgba(0,0,0,0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                backgroundColor: '#06281e',
+                color: '#ffffff',
+                padding: '16px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sliders size={18} color="#34d399" />
+                <h3
+                  id="notif-pref-modal-title"
+                  style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#ffffff' }}
+                >
+                  Compliance Notification Preferences
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPreferencesModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                }}
+                aria-label="Close preferences modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            {preferences ? (
+              <form onSubmit={handleSavePreferences} style={{ padding: '20px' }}>
+                {prefMessage && (
+                  <div
+                    style={{
+                      marginBottom: '16px',
+                      padding: '10px 14px',
+                      backgroundColor: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      color: '#166534',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {prefMessage}
+                  </div>
+                )}
+
+                {/* Lead time */}
+                <div style={{ marginBottom: '18px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      marginBottom: '6px',
+                    }}
+                  >
+                    Reminder Lead Time (Days Before Expiry/Due Date)
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {[7, 15, 30, 60].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() =>
+                          setPreferences((prev) => (prev ? { ...prev, lead_time_days: days } : null))
+                        }
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          border:
+                            preferences.lead_time_days === days
+                              ? '1.5px solid #059669'
+                              : '1px solid #cbd5e1',
+                          backgroundColor:
+                            preferences.lead_time_days === days ? '#f0fdf4' : '#ffffff',
+                          color: preferences.lead_time_days === days ? '#059669' : '#475569',
+                          fontWeight: preferences.lead_time_days === days ? 700 : 500,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {days} Days
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min={1}
+                      max={180}
+                      value={preferences.lead_time_days}
+                      onChange={(e) =>
+                        setPreferences((prev) =>
+                          prev ? { ...prev, lead_time_days: parseInt(e.target.value, 10) || 1 } : null
+                        )
+                      }
+                      style={{
+                        width: '70px',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '12px',
+                        textAlign: 'center',
+                      }}
+                      aria-label="Custom lead time in days"
+                    />
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    Advance warning window for upcoming tasks, consents, and permits.
+                  </div>
+                </div>
+
+                {/* Channel Toggles */}
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '14px',
+                    marginBottom: '18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                  }}
+                >
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
+                    Alert Channels & Triggers
+                  </div>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      fontSize: '12.5px',
+                      color: '#1e293b',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={preferences.in_app_enabled}
+                      onChange={(e) =>
+                        setPreferences((prev) =>
+                          prev ? { ...prev, in_app_enabled: e.target.checked } : null
+                        )
+                      }
+                      style={{ accentColor: '#059669', width: '16px', height: '16px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>In-App Notifications</div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>
+                        Display reminders in top-bar bell and facility operations banner
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      fontSize: '12.5px',
+                      color: '#1e293b',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={preferences.email_enabled}
+                      onChange={(e) =>
+                        setPreferences((prev) =>
+                          prev ? { ...prev, email_enabled: e.target.checked } : null
+                        )
+                      }
+                      style={{ accentColor: '#059669', width: '16px', height: '16px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Email Notifications</div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>
+                        Dispatch notification emails via configured compliance SMTP adapter
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      fontSize: '12.5px',
+                      color: '#1e293b',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={preferences.notify_on_overdue}
+                      onChange={(e) =>
+                        setPreferences((prev) =>
+                          prev ? { ...prev, notify_on_overdue: e.target.checked } : null
+                        )
+                      }
+                      style={{ accentColor: '#dc2626', width: '16px', height: '16px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Notify on Overdue Items</div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>
+                        Raise immediate critical alert once statutory due date has elapsed
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Dispatch Frequency */}
+                <div style={{ marginBottom: '20px' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      marginBottom: '6px',
+                    }}
+                  >
+                    Alert Delivery Cadence
+                  </label>
+                  <select
+                    value={preferences.frequency}
+                    onChange={(e) =>
+                      setPreferences((prev) =>
+                        prev
+                          ? { ...prev, frequency: e.target.value as 'IMMEDIATE' | 'DAILY_DIGEST' }
+                          : null
+                      )
+                    }
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '12.5px',
+                      color: '#1e293b',
+                      backgroundColor: '#ffffff',
+                    }}
+                  >
+                    <option value="IMMEDIATE">Immediate (Real-Time Dispatch per Scan)</option>
+                    <option value="DAILY_DIGEST">Daily Morning Compliance Digest (08:00 AM IST)</option>
+                  </select>
+                </div>
+
+                {/* Modal Footer */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: '10px',
+                    borderTop: '1px solid #f1f5f9',
+                    paddingTop: '16px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowPreferencesModal(false)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: '#475569',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingPreferences}
+                    style={{
+                      padding: '8px 18px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      backgroundColor: '#059669',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {savingPreferences ? 'Saving...' : 'Save Preferences'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                Loading notification preferences...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };

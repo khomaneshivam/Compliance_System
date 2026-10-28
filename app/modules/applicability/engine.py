@@ -129,9 +129,10 @@ class ApplicabilityEngine:
         else:
             status = "NEEDS_REVIEW"
             missing_facts_list = sorted(list(missing_facts))
+            missing_desc = f" ({', '.join(missing_facts_list)})" if missing_facts_list else ""
             explanation = (
-                f"Potentially applicable: evaluation requires missing company facts "
-                f"({', '.join(missing_facts_list)}). Human review and profile completion required."
+                f"Potentially applicable: evaluation requires missing company facts"
+                f"{missing_desc}. Human review and profile verification required."
             )
 
         return RuleEvaluationOutcome(
@@ -151,8 +152,8 @@ class ApplicabilityEngine:
         missing_facts: Set[str],
     ) -> Tuple[EvalResult, Dict[str, Any]]:
         """Recursively evaluates an AST node."""
-        if not isinstance(node, dict):
-            return EvalResult.UNKNOWN, {"error": "Invalid node format"}
+        if not isinstance(node, dict) or not node:
+            return EvalResult.UNKNOWN, {"error": "Invalid or empty node format"}
 
         # Check for group operators: "operator": "AND" | "OR" | "NOT"
         if "operator" in node and str(node["operator"]).upper() in ("AND", "OR", "NOT"):
@@ -199,6 +200,14 @@ class ApplicabilityEngine:
         missing_facts: Set[str],
     ) -> Tuple[EvalResult, Dict[str, Any]]:
         """Evaluates an AND, OR, or NOT group using three-valued logic."""
+        if not rules:
+            return EvalResult.UNKNOWN, {
+                "group_operator": op,
+                "result": EvalResult.UNKNOWN.value,
+                "error": f"Empty condition group for operator '{op}'",
+                "children": [],
+            }
+
         child_results = []
         child_traces = []
 
@@ -212,8 +221,10 @@ class ApplicabilityEngine:
         elif op == "OR":
             final_res = three_valued_or(child_results)
         elif op == "NOT":
-            child_res = child_results[0] if child_results else EvalResult.UNKNOWN
-            final_res = three_valued_not(child_res)
+            if len(child_results) == 1:
+                final_res = three_valued_not(child_results[0])
+            else:
+                final_res = EvalResult.UNKNOWN
         else:
             final_res = EvalResult.UNKNOWN
 
@@ -273,6 +284,18 @@ class ApplicabilityEngine:
 
         # Perform typed comparison
         is_match = self._compare(actual_val, clean_op, expected_val)
+        if is_match is None:
+            # Comparison could not be computed due to type incompatibility or conversion failure
+            missing_facts.add(field_name)
+            return EvalResult.UNKNOWN, {
+                "field": field_name,
+                "operator": operator,
+                "expected": expected_val,
+                "actual": actual_val,
+                "result": EvalResult.UNKNOWN.value,
+                "error": f"Type mismatch or invalid value for comparison: cannot compare value of type {type(actual_val).__name__} with operator '{operator}'",
+            }
+
         res = EvalResult.TRUE if is_match else EvalResult.FALSE
 
         if res == EvalResult.TRUE:
@@ -302,9 +325,15 @@ class ApplicabilityEngine:
 
         return None
 
-    def _compare(self, actual: Any, op: str, expected: Any) -> bool:
-        """Safely executes allowlisted comparison without eval/exec."""
+    def _compare(self, actual: Any, op: str, expected: Any) -> Optional[bool]:
+        """Safely executes allowlisted comparison without eval/exec. Returns None on type or conversion error."""
         try:
+            # Reject booleans for numeric comparisons (since bool is an int subclass in Python)
+            if (isinstance(actual, bool) or isinstance(expected, bool)) and op in (
+                "gt", ">", "gte", ">=", "lt", "<", "lte", "<="
+            ):
+                return None
+
             # String / Equality
             if op in ("eq", "=="):
                 if isinstance(actual, str) and isinstance(expected, str):
@@ -367,9 +396,9 @@ class ApplicabilityEngine:
                 return str(actual).strip().lower() == str(expected).strip().lower()
 
         except (ValueError, TypeError):
-            return False
+            return None
 
-        return False
+        return None
 
 
 engine = ApplicabilityEngine()

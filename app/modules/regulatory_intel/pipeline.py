@@ -41,8 +41,24 @@ from app.modules.regulatory_intel.safeguards import (
     IngestionSecurityError,
     SourceUnavailableError,
     validate_file_content_safety,
+    sanitize_source_error,
 )
 from decimal import Decimal
+
+
+def compute_source_adapter_mode(source: RegulatorySource) -> str:
+    """
+    Computes customer-facing adapter mode: FIXTURE, LIVE_HTTP, DISABLED, or FAILED.
+    Discloses honest operational origin to compliance reviewers.
+    """
+    if not source.is_active:
+        return "DISABLED"
+    if source.health_status == "UNAVAILABLE" or source.consecutive_failures >= 3:
+        return "FAILED"
+    if source.adapter_type == "LOCAL_FIXTURE" or (source.url and source.url.startswith("fixture://")):
+        return "FIXTURE"
+    return "LIVE_HTTP"
+
 
 
 def _make_json_safe(data: Any) -> Any:
@@ -312,9 +328,10 @@ class RegulatoryIngestionPipeline:
             return created_reviews
 
         except Exception as e:
-            # Handle source unavailable, network timeout, or size boundary errors
+            # Handle source unavailable, network timeout, or size boundary errors with sanitized messages
+            category, clean_error = sanitize_source_error(e)
             source.consecutive_failures += 1
-            source.error_message = str(e)
+            source.error_message = clean_error
             if source.consecutive_failures >= 3:
                 source.health_status = "UNAVAILABLE"
             else:
@@ -325,13 +342,18 @@ class RegulatoryIngestionPipeline:
                 source_id=source.id,
                 action="SOURCE_CHECK_FAILED",
                 performed_by=performed_by_name,
-                details={"consecutive_failures": source.consecutive_failures, "error": str(e)},
+                details={
+                    "consecutive_failures": source.consecutive_failures,
+                    "error_category": category,
+                    "error": clean_error,
+                },
             )
             db.commit()
 
             if isinstance(e, (ConnectionError, TimeoutError)):
-                raise SourceUnavailableError(str(e))
+                raise SourceUnavailableError(clean_error)
             raise e
+
 
     def save_draft_analysis(
         self,

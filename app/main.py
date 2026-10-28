@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.database import engine, Base, SessionLocal
+from app.core.database import engine, Base, SessionLocal, check_db_connection
 from app.core.logging import setup_logging, logger, set_correlation_id, get_correlation_id
 from app.core.exceptions import AppException
 from app.api.v1.router import api_router
@@ -27,16 +27,38 @@ async def lifespan(app: FastAPI):
     """Application lifespan context for startup and shutdown hooks."""
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION} [{settings.ENVIRONMENT}]")
     
-    # Initialize schema tables
-    Base.metadata.create_all(bind=engine)
+    # 1. Database Schema Management Policy
+    if settings.ENVIRONMENT.lower() in ("development", "test"):
+        if settings.AUTO_MIGRATE_ON_STARTUP:
+            logger.info("Development/Test environment: Ensuring local schema via Base.metadata.create_all()")
+            Base.metadata.create_all(bind=engine)
+        else:
+            logger.info("Development/Test environment: AUTO_MIGRATE_ON_STARTUP disabled. Relying on Alembic migrations.")
+    else:
+        # Production / Staging: Strictly use Alembic schema migrations. NEVER call Base.metadata.create_all().
+        logger.info("Production/Staging environment: Base.metadata.create_all() bypassed. Schema managed via Alembic.")
+        # Verify database connection
+        db_check = SessionLocal()
+        try:
+            if not check_db_connection(db_check):
+                raise RuntimeError(f"Database connection ping failed during application startup in {settings.ENVIRONMENT} mode.")
+        finally:
+            db_check.close()
     
-    # Auto-seed initial demo personas and master catalogs if empty
+    # 2. Master Data & Demo Persona Initialization
     db = SessionLocal()
     try:
-        seed_demo_data(db)
-        logger.info("Master data and demo personas verified.")
+        is_dev_test = settings.ENVIRONMENT.lower() in ("development", "test")
+        include_demo = is_dev_test and (settings.SEED_DEMO_USERS or settings.ENVIRONMENT.lower() == "development")
+        
+        summary = seed_demo_data(db, include_demo_fixtures=include_demo)
+        logger.info(f"Master reference data initialized (demo fixtures included: {include_demo}).")
     except Exception as exc:
-        logger.error(f"Error during master data seed initialization: {exc}", exc_info=True)
+        if settings.ENVIRONMENT.lower() in ("production", "staging"):
+            logger.critical(f"FATAL: Application initialization failed in {settings.ENVIRONMENT}: {exc}", exc_info=True)
+            raise RuntimeError(f"Startup initialization failed in {settings.ENVIRONMENT}: {exc}") from exc
+        else:
+            logger.error(f"Error during master data seed initialization: {exc}", exc_info=True)
     finally:
         db.close()
         

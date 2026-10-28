@@ -6,10 +6,11 @@ Master Data & Demo Persona Seed Loader
 """
 
 from datetime import date, datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, List
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 
+from app.core.logging import logger
 from app.core.security import get_password_hash
 from app.models.master_data import (
     Jurisdiction,
@@ -36,8 +37,8 @@ from app.models.regulatory_intel import (
 )
 
 
-def seed_demo_data(db: Session) -> Dict[str, Any]:
-    """Populates global reference master data and demo tenant fixtures."""
+def seed_master_data(db: Session) -> Dict[str, Any]:
+    """Populates global reference master data (jurisdictions, categories, authorities, doc types, acts, requirements)."""
     
     # --------------------------------------------------------------------------
     # 1. Global Reference: Jurisdictions
@@ -208,7 +209,13 @@ def seed_demo_data(db: Session) -> Dict[str, Any]:
             status="ACTIVE",
             is_immutable=True,
             effective_from=date(2020, 1, 1),
-            change_rationale="Initial baseline deterministic rule for MPCB environmental consents."
+            change_rationale="Initial baseline deterministic rule for MPCB environmental consents.",
+            publication_date=date(1981, 3, 29),
+            instrument_identifier="Gazette Notification No. G.S.R. 376(E)",
+            clause_reference="Section 25/26, Water Act 1974 & Section 21, Air Act 1981",
+            official_source_url="https://mpcb.gov.in/consent-management",
+            source_fingerprint="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            source_verification_status="UNVERIFIED_DEMO",
         )
         db.add(rule_cto)
         db.flush()
@@ -243,10 +250,30 @@ def seed_demo_data(db: Session) -> Dict[str, Any]:
             status="ACTIVE",
             is_immutable=True,
             effective_from=date(2020, 1, 1),
-            change_rationale="Initial baseline rule for steam boiler statutory inspections."
+            change_rationale="Initial baseline rule for steam boiler statutory inspections.",
+            publication_date=date(1923, 2, 23),
+            instrument_identifier="Act No. 5 of 1923 / DISH Maharashtra Rules",
+            clause_reference="Section 7/8, The Indian Boilers Act, 1923",
+            official_source_url="https://dish.maharashtra.gov.in/boilers",
+            source_fingerprint="d41d8cd98f00b204e9800998ecf8427e00000000000000000000000000000000",
+            source_verification_status="UNVERIFIED_DEMO",
         )
         db.add(rule_boiler)
         db.flush()
+
+    db.commit()
+    return {
+        "jurisdictions_count": db.scalar(select(func.count(Jurisdiction.id))) or 0,
+        "authorities_count": db.scalar(select(func.count(RegulatoryAuthority.id))) or 0,
+        "requirements_count": db.scalar(select(func.count(StatutoryRequirement.id))) or 0,
+    }
+
+
+def seed_demo_fixtures(db: Session) -> Dict[str, Any]:
+    """Populates demo tenants, personas, facilities, equipment, and sample regulatory changes."""
+    req_cto = db.scalars(select(StatutoryRequirement).where(StatutoryRequirement.code == "MPCB-CTO")).first()
+    req_boiler = db.scalars(select(StatutoryRequirement).where(StatutoryRequirement.code == "BOILER-INSP-CERT")).first()
+    authorities = {auth.code: auth for auth in db.scalars(select(RegulatoryAuthority)).all()}
 
     # --------------------------------------------------------------------------
     # 6. Tenant & Persona Fixtures (Demo Tenant A: Acme Manufacturing)
@@ -529,8 +556,39 @@ def seed_demo_data(db: Session) -> Dict[str, Any]:
 
     db.commit()
     return {
+        "tenant_id": tenant_a.id,
+        "plant_id": plant_a.id,
         "tenant_a_id": tenant_a.id,
         "plant_a_id": plant_a.id,
         "tenant_b_id": tenant_b.id,
         "plant_b_id": plant_b.id,
+        "users": [
+            "rohit.sharma@acme-mfg.in",
+            "priya.deshmukh@acme-mfg.in",
+            "amit.jadhav@acme-mfg.in",
+            "sneha.patil@acme-mfg.in",
+            "vikram.mehta@acme-mfg.in",
+            "vikram.singh@beta-pharma.in",
+        ],
     }
+
+
+def seed_demo_data(db: Session, include_demo_fixtures: bool = True) -> Dict[str, Any]:
+    """
+    Main seed entrypoint.
+    Always seeds global master reference data.
+    Conditionally seeds demo personas and sample fixtures when permitted by environment policy.
+    """
+    master_summary = seed_master_data(db)
+
+    if include_demo_fixtures:
+        from app.core.config import settings
+        is_production = settings.ENVIRONMENT.lower() in ("production", "staging")
+        if is_production and not settings.SEED_DEMO_USERS:
+            logger.warning("Demo persona fixtures skipped: demo tenants/personas are prohibited in production/staging.")
+            return master_summary
+        demo_summary = seed_demo_fixtures(db)
+        return {**master_summary, **demo_summary}
+
+    return master_summary
+

@@ -388,13 +388,25 @@ export const RegulatoryChangeDetailPage: React.FC = () => {
                         }}
                       >
                         <td style={{ padding: '14px 16px', maxWidth: '380px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.82rem' }}>
                               {change.notification_number}
                             </span>
                             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>•</span>
                             <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
                               {change.published_date || 'Recent'}
+                            </span>
+                            <span
+                              className="badge badge-neutral"
+                              style={{
+                                fontSize: '0.66rem',
+                                padding: '1px 5px',
+                                background: change.source_adapter_mode === 'LIVE_HTTP' ? '#eff6ff' : '#f8fafc',
+                                color: change.source_adapter_mode === 'LIVE_HTTP' ? '#1d4ed8' : '#64748b',
+                                border: '1px solid var(--border-default)',
+                              }}
+                            >
+                              {change.source_adapter_mode === 'LIVE_HTTP' ? '🌐 Live Portal' : '🧪 Fixture Feed'}
                             </span>
                           </div>
                           <div
@@ -409,6 +421,7 @@ export const RegulatoryChangeDetailPage: React.FC = () => {
                             {change.title}
                           </div>
                         </td>
+
 
                         <td style={{ padding: '14px 16px' }}>
                           <span
@@ -550,20 +563,63 @@ export const RegulatoryChangeDetailPage: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Health Status Badge */}
-                      <span
-                        className={`badge ${
-                          isHealthy
-                            ? 'badge-valid'
-                            : isUnavailable
-                            ? 'badge-danger'
-                            : 'badge-warning'
-                        }`}
-                      >
-                        <Activity size={12} />
-                        <span>{src.health_status}</span>
-                      </span>
+                      {/* Health Status & Mode Badges */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <span
+                          className={`badge ${
+                            src.adapter_mode === 'LIVE_HTTP'
+                              ? 'badge-info'
+                              : src.adapter_mode === 'FAILED'
+                              ? 'badge-danger'
+                              : 'badge-neutral'
+                          }`}
+                          style={{ fontSize: '0.70rem' }}
+                        >
+                          {src.adapter_mode === 'LIVE_HTTP'
+                            ? '🌐 Live Portal'
+                            : src.adapter_mode === 'FAILED'
+                            ? 'Connection Failed'
+                            : src.adapter_mode === 'DISABLED'
+                            ? 'Disabled'
+                            : '🧪 Fixture Feed'}
+                        </span>
+                        <span
+                          className={`badge ${
+                            isHealthy
+                              ? 'badge-valid'
+                              : isUnavailable
+                              ? 'badge-danger'
+                              : 'badge-warning'
+                          }`}
+                        >
+                          <Activity size={12} />
+                          <span>{src.health_status}</span>
+                        </span>
+                      </div>
                     </div>
+
+                    {/* Sanitized Error & Remediation Banner */}
+                    {src.error_message && (
+                      <div
+                        style={{
+                          backgroundColor: '#fff1f2',
+                          border: '1px solid #fecdd3',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                          fontSize: '0.75rem',
+                          color: '#9f1239',
+                          marginBottom: '10px',
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <AlertTriangle size={13} />
+                          <span>{src.error_category || 'Ingestion Alert'}: {src.error_message}</span>
+                        </div>
+                        <div style={{ fontSize: '0.70rem', color: '#be123c', marginTop: '2px' }}>
+                          Remediation: Verify public portal availability or retry during normal scheduled maintenance windows.
+                        </div>
+                      </div>
+                    )}
 
                     {/* Meta Specs */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '12px 0' }}>
@@ -584,6 +640,7 @@ export const RegulatoryChangeDetailPage: React.FC = () => {
                         <span>{src.last_successful_check_at ? new Date(src.last_successful_check_at).toLocaleTimeString() : 'Never'}</span>
                       </div>
                     </div>
+
 
                     {/* URL & Terms */}
                     <div
@@ -676,8 +733,21 @@ export const RegulatoryChangeDetailPage: React.FC = () => {
                     <Sparkles size={11} />
                     <span>AI Confidence: {currentChange.confidence_band} ({Math.round(currentChange.confidence_score * 100)}%)</span>
                   </span>
+                  <span>•</span>
+                  <span
+                    className="badge badge-neutral"
+                    style={{
+                      fontSize: '0.72rem',
+                      background: currentChange.source_adapter_mode === 'LIVE_HTTP' ? '#eff6ff' : '#f8fafc',
+                      color: currentChange.source_adapter_mode === 'LIVE_HTTP' ? '#1d4ed8' : '#64748b',
+                      border: '1px solid var(--border-default)',
+                    }}
+                  >
+                    Origin: {currentChange.source_adapter_mode === 'LIVE_HTTP' ? '🌐 Live Official Portal' : '🧪 Fixture Test Feed'}
+                  </span>
                 </div>
               </div>
+
 
               {/* Status Indicator */}
               <div>

@@ -17,11 +17,23 @@
 
 ## 2. Ingestion & Document Processing Boundaries
 
-### 2.1 Live Government Scrapers vs. Offline Adapters
-- **No Access Control Bypasses:** PlantProof does **not** bypass logins, CAPTCHAs, or anti-bot defenses on government compliance portals. Live web scraping of government portals respects `robots.txt` and is rate-limited to 1 req/5s per domain.
-- **Offline / Local Fixture Execution:** To ensure zero-dependency local test execution without network failures, a local fixture adapter (`fixture://regulatory-vault/demo-feed`) is provided and used in integration tests.
+### 2.1 Live Government Scrapers vs. Offline Fixture Adapters
+- **Explicit Mode Disclosure:** Every regulatory intelligence source and detected change explicitly labels its operational mode:
+  - `FIXTURE` (`🧪 Test Fixture Feed`): Deterministic local benchmark fixtures (e.g. `fixture://regulatory-vault/demo-feed`) loaded from versioned test assets. Used for zero-dependency development, regression testing, and CI pipelines without external network volatility.
+  - `LIVE_HTTP` (`🌐 Live Portal`): Active HTTP polling against official government gazette portals (e.g., eGazette, MPCB, CPCB). Strictly conforms to robots.txt, anti-SSRF protections, and a 1 request / 5s polite rate limit.
+  - `DISABLED`: Inactive or paused regulatory feeds.
+  - `FAILED`: Sources in degraded health status (`health_status == "UNAVAILABLE"` or $\ge 3$ consecutive polling failures).
+- **No Access Control Bypasses:** PlantProof does **not** attempt to bypass logins, CAPTCHAs, Cloudflare WAF, or government anti-bot defenses.
+- **Error Sanitization Policy (Cardinal UX Rule):**
+  - Raw network tracebacks, internal database exception strings, and server file paths are strictly neutralized before returning to API consumers.
+  - Ingestion errors are categorized into 8 standardized error categories: `PAYLOAD_OVERSIZED`, `MALFORMED_STREAM`, `SECURITY_BLOCKED`, `TIMEOUT`, `NETWORK_UNREACHABLE`, `SERVICE_THROTTLED`, `EXTRACTION_PARSE_ERROR`, and `INTERNAL_PROCESSING_ERROR`.
+  - Every error is paired with actionable operational remediation instructions for compliance officers.
 
-### 2.2 OCR & Regional Language Limits
+### 2.2 OCR & Document Extraction Modes
+- **Extraction Provider Mode Disclosure:**
+  - `FIXTURE` (`🧪 Synthetic Test Extractor`): Fast, deterministic heuristic/regex parser adapter calibrated for standard Indian statutory formats (Consent to Operate, Factory Licence, PESO Petroleum Licences, Hazardous Waste Authorizations). Provides 100% precision/recall on reference benchmarks without billable external API dependencies.
+  - `LIVE_OCR` (`🌐 Live Vision OCR`): Google Cloud Document AI or Gemini Vision provider adapters for production deployments.
+  - `FAILED`: Document extraction failure state with sanitized error categories and dual-pane human remediation.
 - **Language Scope:** Default heuristic and vision extraction adapters are calibrated for English and bilingual English-Marathi / English-Hindi official forms.
 - **Handwritten Annotations & Rubber Stamps:** Highly degraded historical scanned certificates with cursive handwritten officer notations or circular rubber stamps over text trigger low confidence scores ($< 0.600$), requiring manual human review.
 
@@ -32,7 +44,9 @@
 ### 3.1 Local Zero-Dependency Execution
 - **Database Engine:** The primary production target is PostgreSQL 16+ using SQLAlchemy 2.0. For local developer workstations and isolated test execution, a zero-dependency SQLite dialect (`plantproof.db` / `sqlite:///:memory:`) is used by default.
 - **Background Worker Processing:** Background job queues default to synchronous, in-process execution when Redis is disabled (`REDIS_ENABLED=false` in `.env`), ensuring full feature usability without external container dependencies.
-- **In-Memory Rate Limiting:** Rate limiting uses a thread-safe sliding window implementation (`app/core/rate_limit.py`). While optimal for single-process local servers, multi-instance horizontal scaling in production requires a distributed Redis token bucket limiter.
+- **In-Memory Rate Limiting Boundaries:**
+  - Local rate limiting uses a thread-safe sliding window implementation (`app/core/rate_limit.py`).
+  - *Operational Boundary:* In-memory sliding windows are scoped to a single Python process. In a horizontally scaled production deployment with multiple Uvicorn/Gunicorn worker processes behind a load balancer, rate limits must be backed by a distributed Redis token-bucket cluster.
 - **Local Vault Storage:** Document and report storage defaults to the local filesystem (`./storage/vault/{tenant_id}/`). Cloud object storage adapters (AWS S3 / Google Cloud Storage) are defined via abstract provider interfaces for production infrastructure.
 
 ---
@@ -41,9 +55,11 @@
 
 | Capability | Current Baseline | Boundary & Scope Status |
 | :--- | :--- | :--- |
-| **Legal Certification** | Deterministic readiness scoring and evidence tracking. | **Out of Scope:** Does not provide formal legal opinions or absolute compliance guarantees. |
+| **Legal Certification** | Deterministic readiness scoring and evidence tracking. | **Out of Scope:** Does not provide formal legal opinions or absolute compliance guarantees ("AI Proposes, Humans Dispose"). |
 | **Direct Portal Filing** | Scrapes public circulars and notifications. | **Out of Scope:** Does not execute bot form submissions or payment filings on government portals. |
 | **Deployment Procedures** | Local development, multi-tenant isolation, automated test verification. | **Out of Scope:** Cloud deployment procedures, Kubernetes manifests, and production CI/CD pipelines are strictly out of scope for this repository. |
+| **Distributed Rate Limiting** | Thread-safe in-memory sliding window limiter. | **Production Requirement:** Switch to Redis token-bucket when scaling beyond a single worker process. |
+| **External Document AI** | Offline synthetic extractor adapter (`FIXTURE`). | **Production Requirement:** Configure Google Document AI or Cloud Vision credentials for live enterprise document vaults. |
 
 ---
 

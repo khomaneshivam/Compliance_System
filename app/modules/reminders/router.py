@@ -3,11 +3,13 @@ Reminder & Alert Notification Router (/api/v1/reminders)
 """
 
 from typing import Optional
+from datetime import date
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import rate_limit
 from app.models.tenancy import User
 from app.modules.reminders.schemas import (
     NotificationResponse,
@@ -62,15 +64,21 @@ def mark_all_notifications_read_endpoint(
     return {"message": f"Marked {count} notifications as read", "count": count}
 
 
-@reminders_router.post("/run-scheduler", response_model=TriggerSchedulerResponse, summary="Trigger Reminder Scan")
+@reminders_router.post(
+    "/run-scheduler",
+    response_model=TriggerSchedulerResponse,
+    summary="Trigger Reminder Scan",
+    dependencies=[Depends(rate_limit(max_requests=10, window_seconds=60, key_prefix="reminder_scheduler"))],
+)
 def run_reminder_scheduler_endpoint(
+    as_of_date: Optional[date] = Query(None, description="Optional simulation date for audit testing (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Triggers an on-demand scheduler scan for due-soon and overdue tasks and requirements with deduplication.
+    Triggers an on-demand scheduler scan for due-soon and overdue tasks, requirements, documents, and regulatory changes with deduplication.
     """
-    return reminder_service.run_reminder_scan(db=db, tenant_id=current_user.tenant_id)
+    return reminder_service.run_reminder_scan(db=db, tenant_id=current_user.tenant_id, as_of_date=as_of_date)
 
 
 @reminders_router.get("/preferences", response_model=NotificationPreferenceResponse, summary="Get Notification Preferences")
@@ -103,7 +111,13 @@ def update_preferences_endpoint(
     return reminder_service.update_preferences(db=db, user=current_user, payload=payload)
 
 
-@reminders_router.post("/test-notification", response_model=NotificationResponse, status_code=status.HTTP_201_CREATED, summary="Send Test Notification")
+@reminders_router.post(
+    "/test-notification",
+    response_model=NotificationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Send Test Notification",
+    dependencies=[Depends(rate_limit(max_requests=20, window_seconds=60, key_prefix="test_notification"))],
+)
 def send_test_notification_endpoint(
     payload: TestNotificationRequest,
     db: Session = Depends(get_db),

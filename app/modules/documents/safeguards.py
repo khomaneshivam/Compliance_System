@@ -195,3 +195,26 @@ def redact_pii(text: str) -> str:
     redacted = PHONE_REGEX.sub("[REDACTED_PHONE]", redacted)
     # Only redact PAN if not part of a factory licence prefix
     return redacted
+
+
+def sanitize_document_error(exc: Exception) -> Tuple[str, str]:
+    """
+    Sanitizes raw document extraction exceptions into customer-facing error categories and human-friendly messages.
+    Guarantees no raw machine stack traces, database dumps, or local file paths leak to users.
+    Returns: (error_category, clean_error_message)
+    """
+    exc_str = str(exc).lower()
+    if isinstance(exc, FileSizeLimitExceededError) or "size" in exc_str or "exceed" in exc_str:
+        return ("PAYLOAD_OVERSIZED", "Uploaded document exceeds the 25 MB safety limit.")
+    if isinstance(exc, EmptyDocumentError) or "empty" in exc_str or "0 bytes" in exc_str:
+        return ("EMPTY_DOCUMENT", "Uploaded document is empty (0 bytes).")
+    if isinstance(exc, MalformedDocumentError) or "malformed" in exc_str or "corrupt" in exc_str:
+        return ("MALFORMED_STREAM", "Document file stream is damaged or contains invalid binary headers.")
+    if isinstance(exc, (ProhibitedFileTypeError, DocumentSecurityError)) or "prohibited" in exc_str or "mime" in exc_str or "disallowed" in exc_str:
+        return ("SECURITY_BLOCKED", "Document rejected by security boundary (disallowed file type or executable header).")
+    if "injection" in exc_str:
+        return ("PROMPT_INJECTION_SUSPECTED", "Document text contained adversarial instructions and was neutralized.")
+    if "extract" in exc_str or "parse" in exc_str:
+        return ("EXTRACTION_PARSE_ERROR", "Document text structure could not be parsed into recognized compliance parameters.")
+    return ("INTERNAL_PROCESSING_ERROR", "An unexpected error occurred during document extraction.")
+

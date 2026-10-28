@@ -29,7 +29,9 @@ from app.modules.regulatory_intel.schemas import (
     ChangeImpactResponse,
     AuditLogResponse,
 )
-from app.modules.regulatory_intel.pipeline import pipeline
+from app.modules.regulatory_intel.pipeline import pipeline, compute_source_adapter_mode
+from app.modules.regulatory_intel.safeguards import sanitize_source_error
+
 
 regulatory_router = APIRouter(
     prefix="/regulatory",
@@ -62,6 +64,7 @@ def get_sources(
             source_type=s.source_type,
             url=s.url,
             adapter_type=s.adapter_type,
+            adapter_mode=compute_source_adapter_mode(s),
             scrape_frequency=s.scrape_frequency,
             rate_limit_per_minute=s.rate_limit_per_minute,
             health_status=s.health_status,
@@ -69,6 +72,7 @@ def get_sources(
             last_successful_check_at=s.last_successful_check_at,
             consecutive_failures=s.consecutive_failures,
             error_message=s.error_message,
+            error_category=sanitize_source_error(Exception(s.error_message))[0] if s.error_message else None,
             is_active=s.is_active,
         )
         for s in sources
@@ -104,10 +108,12 @@ def get_source_health(
         code=source.code,
         name=source.name,
         health_status=source.health_status,
+        adapter_mode=compute_source_adapter_mode(source),
         consecutive_failures=source.consecutive_failures,
         last_checked_at=source.last_checked_at,
         last_successful_check_at=source.last_successful_check_at,
         error_message=source.error_message,
+        error_category=sanitize_source_error(Exception(source.error_message))[0] if source.error_message else None,
         total_documents_ingested=total_docs,
         pending_change_reviews=pending_reviews,
     )
@@ -126,6 +132,7 @@ def trigger_poll(
         ChangeReviewItemResponse(
             id=r.id,
             source_code=r.source.code if r.source else "UNKNOWN",
+            source_adapter_mode=compute_source_adapter_mode(r.source) if r.source else "FIXTURE",
             notification_number=r.notification_number,
             title=r.title,
             published_date=r.published_date,
@@ -167,6 +174,7 @@ def list_changes(
         ChangeReviewItemResponse(
             id=r.id,
             source_code=r.source.code if r.source else "UNKNOWN",
+            source_adapter_mode=compute_source_adapter_mode(r.source) if r.source else "FIXTURE",
             notification_number=r.notification_number,
             title=r.title,
             published_date=r.published_date,
@@ -197,9 +205,11 @@ def get_change_detail(
         id=review.id,
         source_id=review.source_id,
         source_code=review.source.code if review.source else "UNKNOWN",
+        source_adapter_mode=compute_source_adapter_mode(review.source) if review.source else "FIXTURE",
         document_id=review.document_id,
         statutory_requirement_id=review.statutory_requirement_id,
         statutory_requirement_code=review.statutory_requirement.code if review.statutory_requirement else None,
+
         notification_number=review.notification_number,
         title=review.title,
         published_date=review.published_date,

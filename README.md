@@ -101,14 +101,20 @@ pip install -r requirements.txt
 
 ### 5.3 Database Migrations & Demo Data Seeding
 
-PlantProof uses **Alembic** for schema migrations and a dedicated seed loader for synthetic demo data:
+PlantProof uses **Alembic** for schema migrations and dedicated CLI commands for master data, demo data, and notifications:
 
 ```powershell
 # Run database schema migrations
-alembic upgrade head
+python -m app.cli migrate
 
-# Seed synthetic master regulatory data and demo manufacturing enterprise personas
-python -m app.cli seed-demo-data
+# Seed statutory master regulatory catalogs (MPCB, DISH, PESO)
+python -m app.cli seed-master-data
+
+# Seed synthetic demo personas and manufacturing facilities
+python -m app.cli seed-demo-users
+
+# Run multi-channel reminder scan across tasks, requirements, documents, and reviews
+python -m app.cli run-reminders
 ```
 
 *(Note: The FastAPI application also auto-seeds master catalogs on its initial startup if the database is empty).*
@@ -124,7 +130,7 @@ npm install
 
 # Return to root directory
 cd ..
-```
+``` 
 
 ---
 
@@ -181,7 +187,7 @@ PlantProof enforces automated test discipline across backend services and fronte
 
 ### 8.1 Backend Test Suite (Pytest)
 
-Run all 97 backend tests across unit, integration, and security suites:
+Run all 142 backend tests across unit, integration, and security suites:
 ```powershell
 .\venv\Scripts\pytest
 ```
@@ -194,13 +200,16 @@ To run a specific test suite:
 # Run deterministic applicability engine unit tests
 .\venv\Scripts\pytest tests/unit/test_applicability_engine.py -v
 
+# Run regulatory ingestion and error sanitization unit tests
+.\venv\Scripts\pytest tests/unit/test_regulatory_ingestion.py -v
+
 # Run extraction quality and AI boundary tests
 .\venv\Scripts\pytest tests/evaluation/test_extraction_quality.py -v
 ```
 
 ### 8.2 Frontend Test Suite (Vitest)
 
-Run all 11 component and router integration tests:
+Run all 14 component and router integration tests:
 ```powershell
 cd frontend
 npm test
@@ -273,6 +282,8 @@ All system architecture, security reviews, test strategies, and operational guid
 | **[Administrator Guide](file:///d:/Complaince%20System/docs/ADMIN_GUIDE.md)** | Regulatory source health, AST rule authoring, human approval, version supersession, user invitations, and audit logs. |
 | **[Troubleshooting Guide](file:///d:/Complaince%20System/docs/TROUBLESHOOTING.md)** | Diagnostic checklist, port conflict resolution, database lock remediation, error code index. |
 | **[Known Limitations](file:///d:/Complaince%20System/docs/KNOWN_LIMITATIONS.md)** | Accurate summary of current capabilities, mock adapters, local storage boundaries, and future roadmap. |
+| **[Implementation Gap Audit](file:///d:/Complaince%20System/docs/IMPLEMENTATION_GAP_AUDIT.md)** | Comprehensive baseline code audit, verification of claims vs code, and prompt roadmap. |
+| **[Implementation Handover](file:///d:/Complaince%20System/docs/IMPLEMENTATION_HANDOVER.md)** | Final operational verification, test pass matrix (142 backend, 14 frontend), and sign-off report. |
 
 ### Architecture Decision Records (ADRs)
 - **[ADR 0001: Modular Monolith Architecture](file:///d:/Complaince%20System/docs/adr/0001-modular-monolith.md)**

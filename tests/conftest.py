@@ -28,12 +28,25 @@ TestingSessionLocal = sessionmaker(
 )
 
 
+from app.modules.reminders.services import reminder_service, test_notification_adapter
+
+
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Resets sliding window rate limiter before each test."""
     rate_limiter.reset()
     yield
     rate_limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def setup_test_notification_adapter():
+    """Ensures in-memory test adapter is bound for all tests."""
+    reminder_service.set_adapter(test_notification_adapter)
+    test_notification_adapter.clear()
+    yield
+    test_notification_adapter.clear()
+
 
 
 @pytest.fixture(scope="session", autouse=True)

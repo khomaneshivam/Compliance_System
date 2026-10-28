@@ -471,27 +471,45 @@ export const DocumentReviewPage: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Extraction Status */}
+                      {/* Extraction Status & Provider Mode */}
                       <td style={{ padding: '12px 16px' }}>
-                        {doc.extraction_status === 'EXTRACTED' && (
-                          <span className="badge badge-valid" style={{ gap: '4px' }}>
-                            <CheckCircle2 size={12} />
-                            <span>Extracted</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {doc.extraction_status === 'EXTRACTED' && (
+                              <span className="badge badge-valid" style={{ gap: '4px' }}>
+                                <CheckCircle2 size={12} />
+                                <span>Extracted</span>
+                              </span>
+                            )}
+                            {doc.extraction_status === 'QUEUED' && (
+                              <span className="badge badge-info" style={{ gap: '4px' }}>
+                                <Clock size={12} />
+                                <span>Queued</span>
+                              </span>
+                            )}
+                            {doc.extraction_status === 'EXTRACTION_FAILED' && (
+                              <span className="badge badge-danger" style={{ gap: '4px' }}>
+                                <XCircle size={12} />
+                                <span>Failed</span>
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className="badge badge-neutral"
+                            style={{
+                              fontSize: '0.66rem',
+                              padding: '1px 5px',
+                              background: doc.extraction_provider_mode === 'LIVE_OCR' ? '#eff6ff' : '#f8fafc',
+                              color: doc.extraction_provider_mode === 'LIVE_OCR' ? '#1d4ed8' : '#64748b',
+                              border: '1px solid var(--border-default)',
+                              width: 'fit-content',
+                            }}
+                          >
+                            {doc.extraction_provider_mode === 'LIVE_OCR' ? '🌐 Live Vision OCR' : '🧪 Synthetic Extractor'}
                           </span>
-                        )}
-                        {doc.extraction_status === 'QUEUED' && (
-                          <span className="badge badge-info" style={{ gap: '4px' }}>
-                            <Clock size={12} />
-                            <span>Queued</span>
-                          </span>
-                        )}
-                        {doc.extraction_status === 'EXTRACTION_FAILED' && (
-                          <span className="badge badge-danger" style={{ gap: '4px' }}>
-                            <XCircle size={12} />
-                            <span>Failed</span>
-                          </span>
-                        )}
+                        </div>
                       </td>
+
 
                       {/* Statutory Expiry Date */}
                       <td style={{ padding: '12px 16px' }}>
@@ -853,17 +871,55 @@ export const DocumentReviewPage: React.FC = () => {
                         fontSize: '0.8rem',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <Sparkles size={14} color="var(--brand-primary)" />
-                          <span>Deterministic + AI Extraction</span>
+                          <span>Deterministic Extraction</span>
                         </span>
-                        <span className="badge badge-valid">High Confidence</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span
+                            className="badge badge-neutral"
+                            style={{
+                              fontSize: '0.70rem',
+                              background: currentDoc.extraction_provider_mode === 'LIVE_OCR' ? '#eff6ff' : '#f8fafc',
+                              color: currentDoc.extraction_provider_mode === 'LIVE_OCR' ? '#1d4ed8' : '#64748b',
+                              border: '1px solid var(--border-default)',
+                            }}
+                          >
+                            {currentDoc.extraction_provider_mode === 'LIVE_OCR' ? '🌐 Live Vision OCR' : '🧪 Synthetic Test Extractor'}
+                          </span>
+                          <span className="badge badge-valid">High Confidence</span>
+                        </div>
                       </div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '4px' }}>
-                        Retains model provenance, timestamp, snippet citations, and schema version.
+                        {currentDoc.extraction_provider_mode === 'LIVE_OCR'
+                          ? 'Extracted via cloud vision model with grounded bounding coordinates.'
+                          : 'Extracted via offline benchmark parser calibrated for Indian manufacturing certificates.'}
                       </div>
                     </div>
+
+                    {/* Extraction Failure Alert Banner */}
+                    {(currentDoc.extraction_status === 'EXTRACTION_FAILED' || currentDoc.extraction_error) && (
+                      <div
+                        style={{
+                          backgroundColor: '#fff1f2',
+                          border: '1px solid #fecdd3',
+                          borderRadius: '6px',
+                          padding: '10px 14px',
+                          fontSize: '0.80rem',
+                          color: '#9f1239',
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <AlertTriangle size={14} />
+                          <span>{currentDoc.error_category || 'Extraction Alert'}: {currentDoc.extraction_error}</span>
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: '#be123c', marginTop: '4px' }}>
+                          Remediation: Ensure document is uncorrupted, unpassworded, and within the 25 MB limit. You may manually edit parameters below or retry extraction.
+                        </div>
+                      </div>
+                    )}
+
 
                     {/* Cardinal Rule Expiry Notice if Permanent */}
                     {!currentDoc.detected_expiry_date && (

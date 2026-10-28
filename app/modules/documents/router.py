@@ -35,6 +35,23 @@ from app.modules.documents.pipeline import pipeline
 documents_router = APIRouter(prefix="/documents", tags=["Document & Evidence Vault"])
 
 
+def get_document_provider_mode(doc: ComplianceDocument) -> str:
+    if doc.extraction_status == "EXTRACTION_FAILED":
+        return "FAILED"
+    meta = doc.extracted_metadata or {}
+    return meta.get("provider_mode", "FIXTURE")
+
+
+def get_document_error_category(doc: ComplianceDocument) -> Optional[str]:
+    meta = doc.extracted_metadata or {}
+    if "error_category" in meta:
+        return meta["error_category"]
+    if doc.extraction_error:
+        from app.modules.documents.safeguards import sanitize_document_error
+        return sanitize_document_error(Exception(doc.extraction_error))[0]
+    return None
+
+
 @documents_router.post(
     "/upload",
     response_model=DocumentUploadResponse,
@@ -68,7 +85,23 @@ async def upload_document_endpoint(
             document_type_id=document_type_id,
             auto_extract=True,
         )
-        return doc
+        return DocumentUploadResponse(
+            id=doc.id,
+            plant_id=doc.plant_id,
+            original_filename=doc.original_filename,
+            mime_type=doc.mime_type,
+            file_size_bytes=doc.file_size_bytes,
+            content_hash=doc.content_hash,
+            page_count=doc.page_count,
+            storage_key=doc.storage_key,
+            extraction_status=doc.extraction_status,
+            extraction_provider_mode=get_document_provider_mode(doc),
+            error_category=get_document_error_category(doc),
+            review_status=doc.review_status,
+            is_duplicate=doc.is_duplicate,
+            duplicate_of_id=doc.duplicate_of_id,
+            created_at=doc.created_at,
+        )
     except DocumentSecurityError as dse:
         raise HTTPException(status_code=400, detail=dse.message)
     except InsufficientPermissionsError as ipe:
@@ -98,7 +131,27 @@ def list_documents_endpoint(
         stmt = stmt.where(ComplianceDocument.extraction_status == extraction_status)
 
     stmt = stmt.order_by(desc(ComplianceDocument.created_at))
-    return list(db.scalars(stmt).all())
+    docs = list(db.scalars(stmt).all())
+    return [
+        DocumentUploadResponse(
+            id=d.id,
+            plant_id=d.plant_id,
+            original_filename=d.original_filename,
+            mime_type=d.mime_type,
+            file_size_bytes=d.file_size_bytes,
+            content_hash=d.content_hash,
+            page_count=d.page_count,
+            storage_key=d.storage_key,
+            extraction_status=d.extraction_status,
+            extraction_provider_mode=get_document_provider_mode(d),
+            error_category=get_document_error_category(d),
+            review_status=d.review_status,
+            is_duplicate=d.is_duplicate,
+            duplicate_of_id=d.duplicate_of_id,
+            created_at=d.created_at,
+        )
+        for d in docs
+    ]
 
 
 @documents_router.get("/{document_id}", response_model=DocumentDetailResponse, summary="Get Document Review Details")
@@ -143,7 +196,9 @@ def get_document_detail_endpoint(
         storage_key=doc.storage_key,
         document_type_detected=doc.document_type_detected,
         extraction_status=doc.extraction_status,
+        extraction_provider_mode=get_document_provider_mode(doc),
         extraction_error=doc.extraction_error,
+        error_category=get_document_error_category(doc),
         extracted_metadata=doc.extracted_metadata,
         review_status=doc.review_status,
         detected_issue_date=doc.detected_issue_date,
@@ -160,6 +215,7 @@ def get_document_detail_endpoint(
         linked_requirements=linked,
         created_at=doc.created_at,
     )
+
 
 
 @documents_router.get("/{document_id}/file", summary="Stream Original Document from Private Vault")
