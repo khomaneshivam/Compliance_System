@@ -12,7 +12,7 @@ def test_invitation_creates_pending_account_and_single_use_acceptance(
     db_session,
     auth_headers_admin,
 ):
-    email = f"invite-{uuid4().hex[:12]}@example.test"
+    email = f"invite-{uuid4().hex[:12]}@example.com"
     invite_response = client.post(
         "/api/v1/auth/users/invite",
         headers=auth_headers_admin,
@@ -77,7 +77,7 @@ def test_tenant_admin_cannot_invite_super_admin(
         "/api/v1/auth/users/invite",
         headers=auth_headers_admin,
         json={
-            "email": f"super-invite-{uuid4().hex[:12]}@example.test",
+            "email": f"super-invite-{uuid4().hex[:12]}@example.com",
             "full_name": "Escalation Attempt",
             "role": "SUPER_ADMIN",
         },
@@ -93,7 +93,7 @@ def test_invitation_rejects_unsupported_plant_scope(
         "/api/v1/auth/users/invite",
         headers=auth_headers_admin,
         json={
-            "email": f"scope-invite-{uuid4().hex[:12]}@example.test",
+            "email": f"scope-invite-{uuid4().hex[:12]}@example.com",
             "full_name": "Scoped Invite",
             "role": "PLANT_MANAGER",
             "plant_ids": ["plant-pune-01"],
