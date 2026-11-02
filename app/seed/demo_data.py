@@ -118,6 +118,7 @@ def seed_master_data(db: Session) -> Dict[str, Any]:
             auth = RegulatoryAuthority(
                 code=code,
                 name=name,
+                jurisdiction=level,
                 jurisdiction_level=level,
                 jurisdiction_id=j_id,
                 website_url=url
