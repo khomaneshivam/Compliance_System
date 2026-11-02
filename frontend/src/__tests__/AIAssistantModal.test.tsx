@@ -13,9 +13,9 @@ describe('AIAssistantModal Component', () => {
     render(<AIAssistantModal isOpen={true} onClose={() => {}} />);
 
     expect(screen.getByText(/PlantProof Regulatory Assistant/i)).toBeInTheDocument();
-    expect(screen.getByText(/AI Proposes, Humans Dispose/i)).toBeInTheDocument();
+    expect(screen.getByText(/live source-grounded provider not configured/i)).toBeInTheDocument();
     expect(screen.getByText(/Operational Advisory/i)).toBeInTheDocument();
-    expect(screen.getByText(/preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/This assistant panel is a preview/i)).toBeInTheDocument();
     expect(screen.queryByText(/The Factories Act, 1948/i)).not.toBeInTheDocument();
   });
 
