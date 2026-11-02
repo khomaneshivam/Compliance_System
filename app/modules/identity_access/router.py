@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash
 from app.core.rate_limit import rate_limit
-from app.models.tenancy import User, UserInvitation
+from app.models.tenancy import User, UserInvitation, UserPasswordResetToken
 from app.modules.identity_access.schemas import (
     LoginRequest,
     TokenResponse,
@@ -23,6 +23,9 @@ from app.modules.identity_access.schemas import (
     UserListItem,
     InvitationCreatedResponse,
     AcceptInvitationRequest,
+    PasswordResetRequest,
+    PasswordResetRequestResponse,
+    PasswordResetCompleteRequest,
 )
 from app.modules.identity_access.services import (
     authenticate_user,
@@ -53,7 +56,7 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         subject=user.id,
-        claims={"tenant_id": user.tenant_id, "role": user.role},
+        claims={"tenant_id": user.tenant_id, "role": user.role, "auth_version": user.auth_version},
         expires_delta=access_token_expires,
     )
     
@@ -64,6 +67,158 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=user_summary,
     )
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=PasswordResetRequestResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=300, key_prefix="password_reset_request"))],
+)
+def request_password_reset(
+    request: PasswordResetRequest,
+    db: Session = Depends(get_db),
+):
+    """Starts a password reset without disclosing whether an email address exists."""
+    from sqlalchemy import func, select
+
+    generic_message = (
+        "If an active account exists for this email address, password reset instructions will be sent."
+    )
+    normalized_email = str(request.email).strip().lower()
+    user = db.scalar(
+        select(User).where(func.lower(User.email) == normalized_email, User.is_active.is_(True))
+    )
+    if not user:
+        return PasswordResetRequestResponse(message=generic_message)
+
+    now = datetime.now(timezone.utc)
+    prior_requests = list(
+        db.scalars(
+            select(UserPasswordResetToken).where(
+                UserPasswordResetToken.user_id == user.id,
+                UserPasswordResetToken.status == "PENDING",
+            )
+        ).all()
+    )
+    for prior in prior_requests:
+        prior.status = "REVOKED"
+        prior.revoked_at = now
+    db.flush()
+
+    raw_token = secrets.token_urlsafe(48)
+    reset_record = UserPasswordResetToken(
+        user_id=user.id,
+        token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+        status="PENDING",
+        delivery_status="PENDING",
+        requested_at=now,
+        expires_at=now + timedelta(hours=1),
+    )
+    db.add(reset_record)
+    db.commit()
+    db.refresh(reset_record)
+
+    reset_url = f"{settings.PUBLIC_APP_URL.rstrip('/')}/reset-password?token={quote(raw_token)}"
+    email_body = (
+        f"Hello {user.full_name},\n\n"
+        "A password reset was requested for your PlantProof account.\n"
+        f"Use this one-time link to create a new password:\n{reset_url}\n\n"
+        f"This link expires at {reset_record.expires_at.isoformat()} (one hour). "
+        "If you did not request this, ignore this email.\n"
+    )
+    adapter = get_notification_adapter(mode=settings.NOTIFICATION_DELIVERY_MODE)
+    delivered = adapter.send(
+        recipient=user.email,
+        title="Reset your PlantProof password",
+        message=email_body,
+        channel="EMAIL",
+        metadata={"password_reset_id": reset_record.id},
+    )
+
+    if delivered is False:
+        reset_record.status = "REVOKED"
+        reset_record.delivery_status = "FAILED"
+        reset_record.delivery_error_code = "EMAIL_DELIVERY_FAILED"
+        reset_record.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+        # Keep response generic to avoid exposing account state or mail-provider results.
+        return PasswordResetRequestResponse(message=generic_message)
+
+    reset_record.delivery_status = "SENT"
+    reset_record.delivered_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return PasswordResetRequestResponse(
+        message=generic_message,
+        debug_token=raw_token if settings.ENVIRONMENT in ("development", "test") else None,
+    )
+
+
+@router.post(
+    "/password-reset/complete",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=300, key_prefix="password_reset_complete"))],
+)
+def complete_password_reset(
+    request: PasswordResetCompleteRequest,
+    db: Session = Depends(get_db),
+):
+    """Redeems a single-use reset token, changes the password and invalidates old JWTs."""
+    from sqlalchemy import select
+
+    token_hash = hashlib.sha256(request.token.encode("utf-8")).hexdigest()
+    reset_record = db.scalar(
+        select(UserPasswordResetToken)
+        .where(UserPasswordResetToken.token_hash == token_hash)
+        .with_for_update()
+    )
+    now = datetime.now(timezone.utc)
+
+    if not reset_record or reset_record.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This password reset link is invalid, expired or already used.",
+        )
+    if reset_record.expires_at <= now:
+        reset_record.status = "EXPIRED"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This password reset link is invalid, expired or already used.",
+        )
+
+    user = db.get(User, reset_record.user_id)
+    if not user or not user.is_active:
+        reset_record.status = "REVOKED"
+        reset_record.revoked_at = now
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This password reset link is invalid, expired or already used.",
+        )
+
+    user.hashed_password = get_password_hash(request.new_password)
+    user.auth_version += 1
+    reset_record.status = "USED"
+    reset_record.used_at = now
+
+    # Invalidate any other reset links issued for the same account.
+    other_requests = list(
+        db.scalars(
+            select(UserPasswordResetToken).where(
+                UserPasswordResetToken.user_id == user.id,
+                UserPasswordResetToken.id != reset_record.id,
+                UserPasswordResetToken.status == "PENDING",
+            )
+        ).all()
+    )
+    for other in other_requests:
+        other.status = "REVOKED"
+        other.revoked_at = now
+
+    db.commit()
+    return {"message": "Password updated. Sign in again with your new password."}
 
 
 @router.get("/me", response_model=UserSummary)
