@@ -8,7 +8,7 @@ from sqlalchemy import (
     String,
     Integer,
     BigInteger,
-    Numeric,
+    Float,
     Boolean,
     DateTime,
     Date,
