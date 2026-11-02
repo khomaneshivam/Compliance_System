@@ -18,7 +18,6 @@ const inviteSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Please enter a valid work email address'),
   role: z.enum(['SUPER_ADMIN', 'ADMIN', 'PLANT_MANAGER', 'EHS_MANAGER', 'AUDITOR', 'VIEWER']),
-  plantScope: z.string().optional(),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
@@ -463,6 +462,9 @@ export const AdminUsersPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit(onInviteSubmit)} style={{ padding: '24px' }}>
+              <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '12px', lineHeight: 1.5 }}>
+                The invitation creates a pending account. Facility-level scope grants are managed separately and are not assigned by this form.
+              </p>
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                   Full Name *
