@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_, or_, desc, asc, func
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -269,8 +270,19 @@ class ReminderService:
 
     def mark_as_read(self, db: Session, user: User, notification_id: str) -> NotificationResponse:
         """Marks a notification as READ."""
-        notif = db.get(ReminderNotification, notification_id)
-        if not notif or notif.tenant_id != user.tenant_id:
+        # Enforce both tenant and recipient scope in the SQL query. A user must
+        # never mutate a private notification belonging to another user.
+        notif = db.scalar(
+            select(ReminderNotification).where(
+                ReminderNotification.id == notification_id,
+                ReminderNotification.tenant_id == user.tenant_id,
+                or_(
+                    ReminderNotification.user_id == user.id,
+                    ReminderNotification.user_id.is_(None),  # tenant-shared notification
+                ),
+            )
+        )
+        if not notif:
             raise EntityNotFoundError("ReminderNotification", notification_id)
 
         notif.status = "READ"
@@ -354,6 +366,25 @@ class ReminderService:
                 user_pref_cache[u_id] = p
             return user_pref_cache[u_id]
 
+        def insert_notification_once(notification: ReminderNotification) -> bool:
+            """Insert under a savepoint; the unique dedup key is the concurrency arbiter."""
+            try:
+                with db.begin_nested():
+                    db.add(notification)
+                    db.flush()
+                return True
+            except IntegrityError:
+                # Treat only an actual duplicate as deduplication. Re-raise unrelated
+                # integrity failures so the scheduler cannot report false success.
+                duplicate = db.scalar(
+                    select(ReminderNotification.id).where(
+                        ReminderNotification.dedup_key == notification.dedup_key
+                    )
+                )
+                if duplicate:
+                    return False
+                raise
+
         def record_and_dispatch(
             plant_id: str,
             user_id: Optional[str],
@@ -373,28 +404,26 @@ class ReminderService:
 
             # 1. In-App Notification Channel
             if in_app_enabled:
-                in_app_dedup = f"{today_str}:{entity_type}:{entity_id}:{notif_type}:IN_APP"
-                existing = db.scalar(
-                    select(ReminderNotification).where(ReminderNotification.dedup_key == in_app_dedup)
+                recipient_scope = user_id or "SHARED"
+                in_app_dedup = (
+                    f"{tenant_id}:{recipient_scope}:{today_str}:"
+                    f"{entity_type}:{entity_id}:{notif_type}:IN_APP"
                 )
-                if existing:
-                    deduplicated += 1
-                else:
-                    notif = ReminderNotification(
-                        tenant_id=tenant_id,
-                        plant_id=plant_id,
-                        user_id=user_id,
-                        notification_type=notif_type,
-                        entity_type=entity_type,
-                        entity_id=entity_id,
-                        title=title,
-                        message=message,
-                        channel="IN_APP",
-                        status="UNREAD",
-                        dedup_key=in_app_dedup,
-                        metadata_payload=metadata,
-                    )
-                    db.add(notif)
+                notif = ReminderNotification(
+                    tenant_id=tenant_id,
+                    plant_id=plant_id,
+                    user_id=user_id,
+                    notification_type=notif_type,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    title=title,
+                    message=message,
+                    channel="IN_APP",
+                    status="UNREAD",
+                    dedup_key=in_app_dedup,
+                    metadata_payload=metadata,
+                )
+                if insert_notification_once(notif):
                     self.adapter.send(
                         recipient=recipient_email,
                         title=title,
@@ -403,31 +432,30 @@ class ReminderService:
                         metadata=metadata,
                     )
                     generated += 1
+                else:
+                    deduplicated += 1
 
             # 2. Email Channel
             if email_enabled and recipient_email and "@" in recipient_email:
-                email_dedup = f"{today_str}:{entity_type}:{entity_id}:{notif_type}:EMAIL"
-                existing_email = db.scalar(
-                    select(ReminderNotification).where(ReminderNotification.dedup_key == email_dedup)
+                email_dedup = (
+                    f"{tenant_id}:{recipient_scope}:{today_str}:"
+                    f"{entity_type}:{entity_id}:{notif_type}:EMAIL"
                 )
-                if existing_email:
-                    deduplicated += 1
-                else:
-                    notif_email = ReminderNotification(
-                        tenant_id=tenant_id,
-                        plant_id=plant_id,
-                        user_id=user_id,
-                        notification_type=notif_type,
-                        entity_type=entity_type,
-                        entity_id=entity_id,
-                        title=title,
-                        message=message,
-                        channel="EMAIL",
-                        status="UNREAD",
-                        dedup_key=email_dedup,
-                        metadata_payload=metadata,
-                    )
-                    db.add(notif_email)
+                notif_email = ReminderNotification(
+                    tenant_id=tenant_id,
+                    plant_id=plant_id,
+                    user_id=user_id,
+                    notification_type=notif_type,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    title=title,
+                    message=message,
+                    channel="EMAIL",
+                    status="UNREAD",
+                    dedup_key=email_dedup,
+                    metadata_payload=metadata,
+                )
+                if insert_notification_once(notif_email):
                     self.adapter.send(
                         recipient=recipient_email,
                         title=title,
@@ -436,6 +464,8 @@ class ReminderService:
                         metadata=metadata,
                     )
                     generated += 1
+                else:
+                    deduplicated += 1
 
         # ----------------------------------------------------------------------
         # 1. Scan Tasks
