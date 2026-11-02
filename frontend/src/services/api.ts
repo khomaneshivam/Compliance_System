@@ -1661,90 +1661,22 @@ class ApiService {
     prompt: string,
     plantId: string = 'plant-pune-01'
   ): Promise<AIAssistantMessage> {
-    const lower = prompt.toLowerCase();
-
-    // Check for ambiguous / out-of-scope query for strict uncertainty handling
-    if (lower.includes('tax') || lower.includes('gst') || lower.includes('customs') || lower.includes('100% compliant') || lower.includes('guarantee')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'Statutory Boundary Notice: PlantProof tracks environmental, factory safety, and industrial manufacturing permits (MPCB, DISH, PESO, CPCB). This inquiry touches commercial tax or legal certification outside verified factory statutes. In accordance with the Cardinal Regulatory Rule, PlantProof cannot provide legal guarantees or commercial tax opinions.',
-        timestamp: new Date().toISOString(),
-        uncertainty_flag: true,
-        uncertainty_note: 'Query touches out-of-scope regulatory domain or requests an absolute compliance guarantee.',
-      };
+    if (!import.meta.env.DEV) {
+      throw new Error(
+        'The live regulatory Q&A service is not configured. No source-grounded assistant is currently available in this environment.'
+      );
     }
 
-    if (lower.includes('boiler') || lower.includes('steam')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'Based on the Indian Boilers Act, 1923 and Maharashtra Boiler Rules, your facility operates 2 boilers with 12.5 TPH steam capacity. Boilers require an annual physical hydraulic test conducted by a certified Boiler Inspector from DISH/Chief Inspector of Boilers. Operating a boiler with an expired certificate attracts Section 23 penalties.',
-        timestamp: new Date().toISOString(),
-        citations: [
-          {
-            act: 'The Indian Boilers Act, 1923',
-            section: 'Section 7 & 8 (Certificate of Use & Hydraulic Testing)',
-            gazette_ref: 'Gazette of India, Pt. II, Sec. 1',
-            source_url: 'https://dish.maharashtra.gov.in/boiler-act',
-          },
-        ],
-      };
-    }
-
-    if (lower.includes('cto') || lower.includes('consent') || lower.includes('mpcb') || lower.includes('pollution')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'For RED Category chemical manufacturing in Pune, Maharashtra, Consent to Operate (CTO) is issued under Section 25 of the Water Act, 1974 and Section 21 of the Air Act, 1981 by the Maharashtra Pollution Control Board (MPCB). CTO renewals must be submitted at least 60 days before expiration via the MPCB Maitri portal.',
-        timestamp: new Date().toISOString(),
-        citations: [
-          {
-            act: 'Water (Prevention and Control of Pollution) Act, 1974',
-            section: 'Section 25 (Restrictions on new outlets and new discharges)',
-            gazette_ref: 'Central Act No. 6 of 1974',
-            source_url: 'https://mpcb.gov.in/consent-management',
-          },
-        ],
-      };
-    }
-
-    if (lower.includes('hazardous') || lower.includes('waste')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'Under the Hazardous and Other Wastes (Management and Transboundary Movement) Rules, 2016, authorization (Form 2) is required for generation and storage of 45.0 TPA hazardous waste. Form 4 Annual Returns must be filed on or before June 30th of each financial year with MPCB.',
-        timestamp: new Date().toISOString(),
-        citations: [
-          {
-            act: 'Hazardous and Other Wastes Rules, 2016',
-            section: 'Rule 6 & Rule 20 (Authorization & Annual Returns Form 4)',
-            gazette_ref: 'G.S.R. 395(E)',
-            source_url: 'https://cpcb.nic.in/hazardous-waste-rules-2016',
-          },
-        ],
-      };
-    }
-
-    // Default grounded regulatory response
+    // Local preview only. This response deliberately contains no statutory
+    // claims, invented plant facts, or citations.
     return {
-      id: `msg-${Date.now()}`,
+      id: `demo-msg-${Date.now()}`,
       sender: 'assistant',
-      content: `PlantProof Applicability Assessment for ${plantId}: Requirements are deterministically verified against official Central & Maharashtra state gazettes. For this specific inquiry, our active statutory catalogue indicates that factory safety committees are mandated under Section 41G of the Factories Act 1948 once employment exceeds 250 workers.`,
+      content:
+        `Development preview only (facility context: ${plantId}). This chat is not connected to a live AI provider or the verified regulatory catalogue. No compliance conclusion or legal citation has been generated. Do not use this preview for operational decisions.`,
       timestamp: new Date().toISOString(),
-      citations: [
-        {
-          act: 'The Factories Act, 1948',
-          section: 'Section 41G (Workers Participation in Safety Management)',
-          gazette_ref: 'Act No. 63 of 1948',
-          source_url: 'https://labour.gov.in/factories-act',
-        },
-      ],
-      uncertainty_flag: false,
+      uncertainty_flag: true,
+      uncertainty_note: 'Local demonstration response; source-grounded Q&A is not configured.',
     };
   }
 }
