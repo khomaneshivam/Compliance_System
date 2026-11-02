@@ -16,9 +16,14 @@ class NotificationResponse(BaseModel):
     title: str
     message: str
     channel: str            # IN_APP, EMAIL
-    status: str             # UNREAD, READ, DISMISSED
+    status: str             # IN_APP: UNREAD, READ, DISMISSED; EMAIL: NOT_APPLICABLE
     sent_at: datetime
     read_at: Optional[datetime] = None
+    delivery_status: str
+    delivery_attempt_count: int = 0
+    delivery_attempted_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+    delivery_error_code: Optional[str] = None
     metadata_payload: Dict[str, Any] = Field(default_factory=dict)
 
 
