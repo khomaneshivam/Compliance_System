@@ -7,6 +7,7 @@ from typing import List
 import hashlib
 import secrets
 from urllib.parse import quote
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -35,7 +36,13 @@ from app.modules.identity_access.services import (
 )
 from app.modules.reminders.services import get_notification_adapter
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication & Identity"])
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize database timestamps that may be naive on SQLite."""
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 @router.post(
@@ -87,7 +94,9 @@ def request_password_reset(
     )
     normalized_email = str(request.email).strip().lower()
     user = db.scalar(
-        select(User).where(func.lower(User.email) == normalized_email, User.is_active.is_(True))
+        select(User)
+        .where(func.lower(User.email) == normalized_email, User.is_active.is_(True))
+        .with_for_update()
     )
     if not user:
         return PasswordResetRequestResponse(message=generic_message)
@@ -128,13 +137,22 @@ def request_password_reset(
         "If you did not request this, ignore this email.\n"
     )
     adapter = get_notification_adapter(mode=settings.NOTIFICATION_DELIVERY_MODE)
-    delivered = adapter.send(
-        recipient=user.email,
-        title="Reset your PlantProof password",
-        message=email_body,
-        channel="EMAIL",
-        metadata={"password_reset_id": reset_record.id},
-    )
+    try:
+        delivered = adapter.send(
+            recipient=user.email,
+            title="Reset your PlantProof password",
+            message=email_body,
+            channel="EMAIL",
+            metadata={"password_reset_id": reset_record.id},
+        )
+    except Exception as exc:
+        # Never expose provider errors or account existence through the public reset endpoint.
+        logger.error(
+            "Password reset email delivery failed (reset_id=%s, error_type=%s)",
+            reset_record.id,
+            type(exc).__name__,
+        )
+        delivered = False
 
     if delivered is False:
         reset_record.status = "REVOKED"
@@ -180,7 +198,7 @@ def complete_password_reset(
             status_code=status.HTTP_410_GONE,
             detail="This password reset link is invalid, expired or already used.",
         )
-    if reset_record.expires_at <= now:
+    if _as_utc(reset_record.expires_at) <= now:
         reset_record.status = "EXPIRED"
         db.commit()
         raise HTTPException(
@@ -357,17 +375,25 @@ def invite_user(
         "If you did not expect this invitation, ignore this message.\n"
     )
     adapter = get_notification_adapter(mode=settings.NOTIFICATION_DELIVERY_MODE)
-    delivered = adapter.send(
-        recipient=invitation.email,
-        title="Your PlantProof invitation",
-        message=email_body,
-        channel="EMAIL",
-        metadata={
-            "invitation_id": invitation.id,
-            "tenant_id": invitation.tenant_id,
-            "role": invitation.role,
-        },
-    )
+    try:
+        delivered = adapter.send(
+            recipient=invitation.email,
+            title="Your PlantProof invitation",
+            message=email_body,
+            channel="EMAIL",
+            metadata={
+                "invitation_id": invitation.id,
+                "tenant_id": invitation.tenant_id,
+                "role": invitation.role,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "User invitation email delivery failed (invitation_id=%s, error_type=%s)",
+            invitation.id,
+            type(exc).__name__,
+        )
+        delivered = False
 
     if delivered is not False:
         invitation.delivery_status = "SENT"
@@ -421,7 +447,7 @@ def accept_invitation(
     now = datetime.now(timezone.utc)
     if not invitation or invitation.status != "PENDING":
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="This invitation is invalid, expired or already used.")
-    if invitation.expires_at <= now:
+    if _as_utc(invitation.expires_at) <= now:
         invitation.status = "EXPIRED"
         invitation.revoked_at = now
         db.commit()
