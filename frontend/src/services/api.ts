@@ -125,6 +125,35 @@ class ApiService {
     return this.mapApiUser(raw);
   }
 
+  async requestPasswordReset(email: string): Promise<{
+    message: string;
+    debug_token?: string;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/auth/password-reset/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.detail || `Password reset request failed (HTTP ${response.status})`);
+    }
+    return payload as { message: string; debug_token?: string };
+  }
+
+  async completePasswordReset(token: string, newPassword: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/password-reset/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.detail || `Password reset failed (HTTP ${response.status})`);
+    }
+    return payload as { message: string };
+  }
+
   async acceptInvitation(token: string, password: string): Promise<User> {
     const response = await fetch(`${API_BASE_URL}/auth/invitations/accept`, {
       method: 'POST',
