@@ -45,11 +45,23 @@ class PlantRequirement(TimestampedModel):
 
 class EvidenceLink(TimestampedModel):
     __tablename__ = "evidence_links"
-    
-    plant_requirement_id: Mapped[str] = mapped_column(String(36), ForeignKey("plant_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
-    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("compliance_documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    linked_by_user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    
+
+    plant_requirement_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("plant_requirements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("compliance_documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    linked_by_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Legacy evidence-link metadata retained from the initial schema.
+    verification_status: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, default="LINKED", server_default="LINKED"
+    )
+    confidence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Relationships
     plant_requirement: Mapped["PlantRequirement"] = relationship("PlantRequirement", back_populates="evidence_links")
     document: Mapped["ComplianceDocument"] = relationship("ComplianceDocument")
