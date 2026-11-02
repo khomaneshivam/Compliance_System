@@ -1,0 +1,80 @@
+name: PlantProof CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plantproof-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests and database migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENVIRONMENT: test
+      DEBUG: "false"
+      SECRET_KEY: "ci-only-plantproof-secret-key-never-use-outside-tests-2026"
+      DATABASE_URL: "sqlite:///./plantproof-ci.db"
+      AUTO_MIGRATE_ON_STARTUP: "false"
+      SEED_DEMO_USERS: "false"
+      LOG_LEVEL: "WARNING"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Upgrade an empty database to Alembic head
+        run: python -m alembic upgrade head
+
+      - name: Run backend test suite
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend tests, lint and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Run frontend lint
+        run: npm run lint
+
+      - name: Build production frontend bundle
+        run: npm run build
