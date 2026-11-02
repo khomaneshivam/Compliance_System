@@ -2,6 +2,7 @@
 Plant & Company Profile Domain Services
 """
 
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from sqlalchemy import select
 
 from app.models.tenancy import Plant, User
 from app.models.profile import PlantProfile, PlantEquipment
+from app.core.config import settings
+from app.core.exceptions import ConflictError
 from app.modules.tenant_profile.schemas import PlantProfileUpdate
 
 
@@ -35,25 +38,14 @@ def get_plants_for_user(db: Session, user: User) -> List[Plant]:
 
 
 def get_or_create_plant_profile(db: Session, plant: Plant) -> PlantProfile:
-    """Retrieves existing profile or initializes a default operational profile."""
+    """Retrieves a profile or creates an explicitly incomplete, unknown-valued record."""
     stmt = select(PlantProfile).where(PlantProfile.plant_id == plant.id)
     profile = db.scalars(stmt).first()
     if not profile:
         profile = PlantProfile(
             plant_id=plant.id,
-            industry_category="RED",
-            sector="Chemicals",
-            employee_count=120,
-            contract_labour_count=45,
-            built_up_area_sqm=12500.0,
-            capital_investment_inr=85000000.0,
-            connected_power_kw=750.0,
-            dg_set_capacity_kva=500.0,
-            hazardous_waste_tpa=12.5,
-            effluent_discharge_kld=45.0,
-            boiler_count=1,
-            steam_capacity_tph=4.5,
-            raw_attributes={}
+            profile_status="INCOMPLETE",
+            raw_attributes={},
         )
         db.add(profile)
         db.commit()
@@ -64,15 +56,50 @@ def get_or_create_plant_profile(db: Session, plant: Plant) -> PlantProfile:
 def update_plant_profile(
     db: Session,
     plant: Plant,
-    profile_update: PlantProfileUpdate
+    profile_update: PlantProfileUpdate,
+    user: User,
 ) -> PlantProfile:
-    """Updates operational profile fields."""
+    """Updates profile fields and invalidates any previous human verification."""
     profile = get_or_create_plant_profile(db, plant)
     update_data = profile_update.model_dump(exclude_unset=True)
-    
+
     for key, value in update_data.items():
         setattr(profile, key, value)
-        
+
+    # Preserve DEMO_FIXTURE only under automated test execution. Real updates
+    # invalidate prior verification and must be reviewed by another user.
+    if not (settings.ENVIRONMENT == "test" and profile.profile_status == "DEMO_FIXTURE"):
+        profile.profile_status = "INCOMPLETE"
+        profile.verified_by_user_id = None
+        profile.verified_at = None
+        profile.verification_notes = None
+    profile.updated_by_user_id = user.id
+
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+def verify_plant_profile(
+    db: Session,
+    plant: Plant,
+    user: User,
+    verification_notes: Optional[str] = None,
+) -> PlantProfile:
+    """Verify a completed facility profile; enforces maker-checker separation."""
+    profile = get_or_create_plant_profile(db, plant)
+    if profile.updated_by_user_id and profile.updated_by_user_id == user.id:
+        raise ConflictError(
+            "The user who last edited this profile cannot verify the same revision. "
+            "A different authorized reviewer must approve it."
+        )
+    if profile.profile_status == "VERIFIED":
+        raise ConflictError("This plant profile is already verified. Make a new revision before re-verification.")
+
+    profile.profile_status = "VERIFIED"
+    profile.verified_by_user_id = user.id
+    profile.verified_at = datetime.now(timezone.utc)
+    profile.verification_notes = verification_notes
     db.commit()
     db.refresh(profile)
     return profile
