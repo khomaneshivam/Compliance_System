@@ -31,7 +31,7 @@ import type {
   AIAssistantMessage,
 } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000/api/v1' : '/api/v1')).replace(/\\/$/, '');
 
 class ApiService {
   private token: string | null = null;
@@ -1548,21 +1548,20 @@ class ApiService {
     email: string;
     full_name: string;
     role: string;
-    plant_ids?: string[];
-  }): Promise<User> {
-    const res = await this.request<Record<string, unknown>>('/auth/users/invite', {
+  }): Promise<{
+    invitation_id: string;
+    email: string;
+    role: string;
+    status: string;
+    delivery_status: string;
+    expires_at: string;
+    invitation_url?: string;
+    debug_token?: string;
+  }> {
+    return await this.request('/auth/users/invite', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return {
-      id: String(res.id || `user-${Date.now()}`),
-      email: payload.email,
-      fullName: payload.full_name,
-      role: payload.role as User['role'],
-      tenantId: 'tenant-acme-01',
-      tenantName: 'Acme Manufacturing Group',
-      plantIds: payload.plant_ids || ['plant-pune-01'],
-    };
   }
 
   // ---------------------------------------------------------------------------
