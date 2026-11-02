@@ -98,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return DEMO_USERS[0];
   });
-  const [isLoading, setIsLoading] = useState<boolean>(() => !import.meta.env.DEV && !!api.getToken());
+  const [isLoading, setIsLoading] = useState<boolean>(() => !import.meta.env.DEV && !!api.getToken?.());
 
   const [activePlantId, setActivePlantId] = useState<string>(() => {
     return localStorage.getItem('plantproof_active_plant') || 'plant-pune-01';
@@ -113,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   useEffect(() => {
-    const token = api.getToken();
+    const token = api.getToken?.();
     if (!token) {
       setIsLoading(false);
       return;
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {
         if (active) {
-          api.setToken(null);
+          api.setToken?.(null);
           setUser(null);
         }
       })
@@ -173,7 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const target = DEMO_USERS.find((u) => u.id === userId);
     if (target) {
       setUser(target);
-      api.setToken(`demo-jwt-token-for-${target.id}`);
+      api.setToken?.(`demo-jwt-token-for-${target.id}`);
     }
   };
 
