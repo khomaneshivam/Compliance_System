@@ -62,13 +62,25 @@ class TaskAttachment(TimestampedModel):
 class AuditLog(TimestampedModel):
     __tablename__ = "audit_logs"
     
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Audit rows are retained historical records. RESTRICT prevents a parent
+    # hard-delete from cascading through the audit ledger.
+    tenant_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    entity_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    entity_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     previous_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    new_state: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    new_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+
+    # Legacy columns retained for audit history compatibility.
+    plant_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    before_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    after_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    provenance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant")
