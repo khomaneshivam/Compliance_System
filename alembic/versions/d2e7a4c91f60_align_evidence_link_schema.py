@@ -61,12 +61,6 @@ def upgrade() -> None:
         ["document_id"],
         unique=False,
     )
-    op.create_index(
-        "ix_evidence_links_linked_by_user_id",
-        "evidence_links",
-        ["linked_by_user_id"],
-        unique=False,
-    )
 
 
 def downgrade() -> None:
