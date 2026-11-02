@@ -44,12 +44,14 @@ jobs:
           pip install -r requirements.txt
 
       - name: Upgrade an empty database to Alembic head
+        id: alembic_upgrade
         run: python -m alembic upgrade head
 
       - name: Check ORM and migration schema parity
         run: python -m alembic check
 
       - name: Run backend test suite
+        if: ${{ always() && steps.alembic_upgrade.outcome == 'success' }}
         run: python -m pytest -q
 
   frontend:
