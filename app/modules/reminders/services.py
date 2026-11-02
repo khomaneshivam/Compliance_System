@@ -221,6 +221,7 @@ class ReminderService:
 
         stmt = select(ReminderNotification).where(
             ReminderNotification.tenant_id == user.tenant_id,
+            ReminderNotification.channel == "IN_APP",
             or_(ReminderNotification.user_id == user.id, ReminderNotification.user_id.is_(None)),
         )
 
@@ -232,6 +233,7 @@ class ReminderService:
 
         unread_stmt = select(func.count()).where(
             ReminderNotification.tenant_id == user.tenant_id,
+            ReminderNotification.channel == "IN_APP",
             or_(ReminderNotification.user_id == user.id, ReminderNotification.user_id.is_(None)),
             ReminderNotification.status == "UNREAD",
         )
@@ -255,6 +257,11 @@ class ReminderService:
                 status=r.status,
                 sent_at=r.sent_at,
                 read_at=r.read_at,
+                delivery_status=r.delivery_status,
+                delivery_attempt_count=r.delivery_attempt_count,
+                delivery_attempted_at=r.delivery_attempted_at,
+                delivered_at=r.delivered_at,
+                delivery_error_code=r.delivery_error_code,
                 metadata_payload=r.metadata_payload or {},
             )
             for r in rows
@@ -276,6 +283,7 @@ class ReminderService:
             select(ReminderNotification).where(
                 ReminderNotification.id == notification_id,
                 ReminderNotification.tenant_id == user.tenant_id,
+                ReminderNotification.channel == "IN_APP",
                 or_(
                     ReminderNotification.user_id == user.id,
                     ReminderNotification.user_id.is_(None),  # tenant-shared notification
@@ -302,6 +310,11 @@ class ReminderService:
             status=notif.status,
             sent_at=notif.sent_at,
             read_at=notif.read_at,
+            delivery_status=notif.delivery_status,
+            delivery_attempt_count=notif.delivery_attempt_count,
+            delivery_attempted_at=notif.delivery_attempted_at,
+            delivered_at=notif.delivered_at,
+            delivery_error_code=notif.delivery_error_code,
             metadata_payload=notif.metadata_payload or {},
         )
 
@@ -309,6 +322,7 @@ class ReminderService:
         """Marks all unread notifications for the user as READ."""
         stmt = select(ReminderNotification).where(
             ReminderNotification.tenant_id == user.tenant_id,
+            ReminderNotification.channel == "IN_APP",
             or_(ReminderNotification.user_id == user.id, ReminderNotification.user_id.is_(None)),
             ReminderNotification.status == "UNREAD",
         )
@@ -401,10 +415,11 @@ class ReminderService:
 
             in_app_enabled = pref.in_app_enabled if pref else True
             email_enabled = pref.email_enabled if pref else False
+            recipient_scope = user_id or "SHARED"
+            dispatch_time = datetime.now(timezone.utc)
 
             # 1. In-App Notification Channel
             if in_app_enabled:
-                recipient_scope = user_id or "SHARED"
                 in_app_dedup = (
                     f"{tenant_id}:{recipient_scope}:{today_str}:"
                     f"{entity_type}:{entity_id}:{notif_type}:IN_APP"
@@ -420,23 +435,20 @@ class ReminderService:
                     message=message,
                     channel="IN_APP",
                     status="UNREAD",
+                    delivery_status="DELIVERED",
+                    delivered_at=dispatch_time,
                     dedup_key=in_app_dedup,
                     metadata_payload=metadata,
                 )
                 if insert_notification_once(notif):
-                    self.adapter.send(
-                        recipient=recipient_email,
-                        title=title,
-                        message=message,
-                        channel="IN_APP",
-                        metadata=metadata,
-                    )
+                    # Presence in the in-app notification store is the delivery
+                    # event. Do not route it through an email/SMS adapter.
                     generated += 1
                 else:
                     deduplicated += 1
 
             # 2. Email Channel
-            if email_enabled and recipient_email and "@" in recipient_email:
+            if email_enabled and recipient_email and "@" in recipient_email and user_id:
                 email_dedup = (
                     f"{tenant_id}:{recipient_scope}:{today_str}:"
                     f"{entity_type}:{entity_id}:{notif_type}:EMAIL"
@@ -451,18 +463,37 @@ class ReminderService:
                     title=title,
                     message=message,
                     channel="EMAIL",
-                    status="UNREAD",
+                    status="NOT_APPLICABLE",
+                    delivery_status="PENDING",
                     dedup_key=email_dedup,
                     metadata_payload=metadata,
                 )
                 if insert_notification_once(notif_email):
-                    self.adapter.send(
-                        recipient=recipient_email,
-                        title=title,
-                        message=message,
-                        channel="EMAIL",
-                        metadata=metadata,
-                    )
+                    notif_email.delivery_attempt_count += 1
+                    notif_email.delivery_attempted_at = dispatch_time
+                    try:
+                        delivered = self.adapter.send(
+                            recipient=recipient_email,
+                            title=title,
+                            message=message,
+                            channel="EMAIL",
+                            metadata=metadata,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "Reminder email delivery failed (notification_id=%s, error_type=%s)",
+                            notif_email.id,
+                            type(exc).__name__,
+                        )
+                        delivered = False
+
+                    if delivered:
+                        notif_email.delivery_status = "DELIVERED"
+                        notif_email.delivered_at = datetime.now(timezone.utc)
+                        notif_email.delivery_error_code = None
+                    else:
+                        notif_email.delivery_status = "FAILED"
+                        notif_email.delivery_error_code = "EMAIL_ADAPTER_REJECTED"
                     generated += 1
                 else:
                     deduplicated += 1
@@ -500,7 +531,7 @@ class ReminderService:
                 msg = f"Task '{task.title}' is due on {task.due_date.isoformat()} ({days_left} days remaining)."
 
             if notif_type:
-                recipient = assigned_user.email if assigned_user else "plant-team@acme-mfg.in"
+                recipient = assigned_user.email if assigned_user else None
                 record_and_dispatch(
                     plant_id=task.plant_id,
                     user_id=task.assigned_to_user_id,
@@ -550,7 +581,7 @@ class ReminderService:
                 record_and_dispatch(
                     plant_id=req.plant_id,
                     user_id=None,  # Facility-wide obligation
-                    recipient_email="compliance-team@acme-mfg.in",
+                    recipient_email=None,
                     entity_type="REQUIREMENT",
                     entity_id=req.id,
                     notif_type=notif_type,
@@ -592,7 +623,7 @@ class ReminderService:
                 msg = f"Compliance evidence document '{doc.original_filename}' will expire on {doc.detected_expiry_date.isoformat()} ({days_left} days remaining)."
 
             if notif_type:
-                recipient = doc_user.email if doc_user else "plant-documents@acme-mfg.in"
+                recipient = doc_user.email if doc_user else None
                 record_and_dispatch(
                     plant_id=doc.plant_id,
                     user_id=doc.uploaded_by_user_id,
@@ -630,7 +661,7 @@ class ReminderService:
             record_and_dispatch(
                 plant_id=change.plant_id,
                 user_id=None,  # General compliance queue
-                recipient_email="compliance-officer@acme-mfg.in",
+                recipient_email=None,
                 entity_type="REGULATORY_CHANGE",
                 entity_id=change.id,
                 notif_type="PENDING_REVIEW",
@@ -677,7 +708,9 @@ class ReminderService:
             title=payload.title,
             message=payload.message,
             channel=payload.channel,
-            status="UNREAD",
+            status="UNREAD" if payload.channel == "IN_APP" else "NOT_APPLICABLE",
+            delivery_status="DELIVERED" if payload.channel == "IN_APP" else "PENDING",
+            delivered_at=datetime.now(timezone.utc) if payload.channel == "IN_APP" else None,
             dedup_key=dedup_key,
             metadata_payload={"is_test": True, "dispatched_by": user.email},
         )
@@ -685,13 +718,29 @@ class ReminderService:
         db.commit()
         db.refresh(notif)
 
-        self.adapter.send(
-            recipient=user.email,
-            title=payload.title,
-            message=payload.message,
-            channel=payload.channel,
-            metadata={"is_test": True, "notification_id": notif.id},
-        )
+        if payload.channel == "EMAIL":
+            notif.delivery_attempt_count += 1
+            notif.delivery_attempted_at = datetime.now(timezone.utc)
+            try:
+                delivered = self.adapter.send(
+                    recipient=user.email,
+                    title=payload.title,
+                    message=payload.message,
+                    channel=payload.channel,
+                    metadata={"is_test": True, "notification_id": notif.id},
+                )
+            except Exception as exc:
+                logger.error(
+                    "Test notification email delivery failed (notification_id=%s, error_type=%s)",
+                    notif.id,
+                    type(exc).__name__,
+                )
+                delivered = False
+            notif.delivery_status = "DELIVERED" if delivered else "FAILED"
+            notif.delivered_at = datetime.now(timezone.utc) if delivered else None
+            notif.delivery_error_code = None if delivered else "EMAIL_ADAPTER_REJECTED"
+            db.commit()
+            db.refresh(notif)
 
         return NotificationResponse(
             id=notif.id,
@@ -705,6 +754,11 @@ class ReminderService:
             status=notif.status,
             sent_at=notif.sent_at,
             read_at=notif.read_at,
+            delivery_status=notif.delivery_status,
+            delivery_attempt_count=notif.delivery_attempt_count,
+            delivery_attempted_at=notif.delivery_attempted_at,
+            delivered_at=notif.delivered_at,
+            delivery_error_code=notif.delivery_error_code,
             metadata_payload=notif.metadata_payload or {},
         )
 
