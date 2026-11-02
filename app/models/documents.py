@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     JSON,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel
@@ -113,6 +114,7 @@ class ExtractedField(TimestampedModel):
 
     is_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     is_mandatory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
 
     # Legacy field provenance retained from the original extraction schema.
     field_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -142,6 +144,7 @@ class ValidationCheck(TimestampedModel):
     # have been reviewed and normalized.
     check_status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING", server_default="PENDING")
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="MEDIUM", server_default="MEDIUM")
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
 
     # Relationships
     document: Mapped["ComplianceDocument"] = relationship("ComplianceDocument", back_populates="validation_checks")
