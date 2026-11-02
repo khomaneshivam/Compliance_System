@@ -57,8 +57,8 @@ class EvidenceLink(TimestampedModel):
     )
 
     # Legacy evidence-link metadata retained from the initial schema.
-    verification_status: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True, default="LINKED", server_default="LINKED"
+    verification_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="LINKED", server_default="LINKED"
     )
     confidence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
