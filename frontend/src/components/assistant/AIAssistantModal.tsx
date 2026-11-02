@@ -24,15 +24,10 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
       id: 'msg-initial',
       sender: 'assistant',
       content:
-        'Hello! I am the PlantProof Regulatory Intelligence Assistant. You can ask me about Central and Maharashtra statutory requirements (MPCB, DISH, PESO, CPCB), renewal windows, or gazette amendment impacts for Acme Pune Plant.',
+        'This assistant panel is a preview. A live, source-grounded regulatory Q&A service is not configured. It cannot provide legal conclusions, verified citations, or compliance sign-off.',
       timestamp: new Date().toISOString(),
-      citations: [
-        {
-          act: 'The Factories Act, 1948',
-          section: 'Statutory Safety & Licensing Framework',
-          source_url: 'https://dish.maharashtra.gov.in',
-        },
-      ],
+      uncertainty_flag: true,
+      uncertainty_note: 'No live regulatory assistant provider is registered.',
     },
   ]);
   const [input, setInput] = useState<string>('');
@@ -58,13 +53,13 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
     try {
       const response = await api.queryAIAssistant(text.trim(), 'plant-pune-01');
       setMessages((prev) => [...prev, response]);
-    } catch {
+    } catch (err: unknown) {
       setMessages((prev) => [
         ...prev,
         {
           id: `msg-${Date.now()}`,
           sender: 'assistant',
-          content: 'Unable to reach the regulatory inference service. Please check your network connection.',
+          content: err instanceof Error ? err.message : 'The regulatory assistant is unavailable.',
           timestamp: new Date().toISOString(),
           uncertainty_flag: true,
         },
@@ -136,7 +131,7 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
                 PlantProof Regulatory Assistant
               </h2>
               <div style={{ fontSize: '11px', color: '#a7f3d0' }}>
-                Grounded in Official Indian Statutory Codes • "AI Proposes, Humans Dispose"
+                Preview only • live source-grounded provider not configured
               </div>
             </div>
           </div>
