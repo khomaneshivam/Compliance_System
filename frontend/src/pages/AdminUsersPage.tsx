@@ -18,7 +18,7 @@ const inviteSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Please enter a valid work email address'),
   role: z.enum(['SUPER_ADMIN', 'ADMIN', 'PLANT_MANAGER', 'EHS_MANAGER', 'AUDITOR', 'VIEWER']),
-  plantScope: z.string().min(1, 'Please select plant scope'),
+  plantScope: z.string().optional(),
 });
 
 type InviteFormData = z.infer<typeof inviteSchema>;
@@ -42,7 +42,6 @@ export const AdminUsersPage: React.FC = () => {
       fullName: '',
       email: '',
       role: 'EHS_MANAGER',
-      plantScope: 'plant-pune-01',
     },
   });
 
@@ -64,14 +63,13 @@ export const AdminUsersPage: React.FC = () => {
 
   const onInviteSubmit = async (data: InviteFormData) => {
     try {
-      const created = await api.inviteAdminUser({
+      const invitation = await api.inviteAdminUser({
         full_name: data.fullName,
         email: data.email,
         role: data.role,
-        plant_ids: [data.plantScope],
       });
-      setUsers((prev) => [created, ...prev]);
-      setFeedback(`Invitation dispatched to ${data.email} with ${data.role} permissions.`);
+      const debugText = invitation.debug_token ? ` Development token: ${invitation.debug_token}` : '';
+      setFeedback(`Invitation created for ${data.email}. Delivery: ${invitation.delivery_status}. Expires: ${new Date(invitation.expires_at).toLocaleString()}.${debugText}`);
       setTimeout(() => setFeedback(null), 3500);
       setShowInviteModal(false);
       reset();
