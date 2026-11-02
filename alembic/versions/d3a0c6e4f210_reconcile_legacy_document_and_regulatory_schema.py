@@ -141,6 +141,7 @@ def upgrade() -> None:
         ("ix_compliance_documents_plant_id", "compliance_documents", ["plant_id"], False),
         ("ix_compliance_documents_tenant_id", "compliance_documents", ["tenant_id"], False),
         ("ix_compliance_tasks_plant_id", "compliance_tasks", ["plant_id"], False),
+        ("ix_compliance_tasks_tenant_id", "compliance_tasks", ["tenant_id"], False),
         ("ix_extracted_fields_document_id", "extracted_fields", ["document_id"], False),
         ("ix_validation_checks_document_id", "validation_checks", ["document_id"], False),
         ("ix_plants_code", "plants", ["code"], False),
