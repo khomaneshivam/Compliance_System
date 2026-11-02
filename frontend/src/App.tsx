@@ -8,6 +8,7 @@ import { AppLayout } from './components/layout/AppLayout';
 // Core Pages
 import { AuthPage } from './pages/AuthPage';
 import { AcceptInvitationPage } from './pages/AcceptInvitationPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { SetupWizardPage } from './pages/SetupWizardPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { RequirementsPage } from './pages/RequirementsPage';
@@ -45,6 +46,7 @@ export const App: React.FC = () => {
             {/* Public Authentication Screen */}
             <Route path="/auth/login" element={<AuthPage />} />
             <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Authenticated Application Routes (Protected with Role-Aware AppLayout) */}
             <Route
