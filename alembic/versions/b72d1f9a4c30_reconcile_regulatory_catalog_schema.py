@@ -128,43 +128,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove only fields introduced by this revision; restore original column names."""
-    with op.batch_alter_table("statutory_requirements", schema=None) as batch_op:
-        batch_op.drop_index("ix_statutory_requirements_act_id")
-        batch_op.drop_column("grace_period_days")
-        batch_op.drop_column("validity_period_months")
-        batch_op.drop_column("description")
-        batch_op.alter_column(
-            "statutory_reference",
-            existing_type=sa.String(length=255),
-            nullable=False,
-        )
-        batch_op.alter_column(
-            "plain_language_summary",
-            existing_type=sa.Text(),
-            nullable=False,
-        )
-        batch_op.alter_column(
-            "code",
-            existing_type=sa.String(length=100),
-            type_=sa.String(length=50),
-            nullable=False,
-        )
-
-    with op.batch_alter_table("regulatory_acts", schema=None) as batch_op:
-        batch_op.drop_index("ix_regulatory_acts_authority_id")
-        batch_op.drop_column("short_name")
-        batch_op.alter_column(
-            "year",
-            new_column_name="enactment_year",
-            existing_type=sa.Integer(),
-            nullable=False,
-        )
-        batch_op.alter_column("code", existing_type=sa.String(length=50), nullable=False)
-
-    with op.batch_alter_table("regulatory_authorities", schema=None) as batch_op:
-        batch_op.alter_column(
-            "jurisdiction",
-            existing_type=sa.String(length=100),
-            nullable=False,
-        )
+    """This revision is forward-only to preserve migrated data and historical provenance."""
+    raise RuntimeError(
+        "This migration is intentionally irreversible. Restore a verified backup or "
+        "create a forward repair migration; do not drop retained data."
+    )
