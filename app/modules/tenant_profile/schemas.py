@@ -59,7 +59,7 @@ class PlantEquipmentResponse(BaseModel):
     plant_id: str
     equipment_type: str
     tag_number: str
-    capacity: str
+    capacity: Optional[str] = None
     manufacturer: Optional[str] = None
     installation_date: Optional[date] = None
 
