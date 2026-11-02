@@ -28,11 +28,11 @@ class RegulatoryUpdate(TimestampedModel):
     status: Mapped[str] = mapped_column(String(50), default="NEW", nullable=False)
 
     # Legacy source fields retained until every historic source is resolved.
-    authority: Mapped[str] = mapped_column(String(100), nullable=False)
+    legacy_authority: Mapped[str] = mapped_column("authority", String(100), nullable=False)
     provenance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # Relationships
-    authority: Mapped["RegulatoryAuthority"] = relationship("RegulatoryAuthority")
+    authority: Mapped[Optional["RegulatoryAuthority"]] = relationship("RegulatoryAuthority")
     affected_maps: Mapped[List["AffectedRequirementMap"]] = relationship("AffectedRequirementMap", back_populates="regulatory_update", cascade="all, delete-orphan")
     reviews: Mapped[List["RegulatoryReview"]] = relationship("RegulatoryReview", back_populates="regulatory_update", cascade="all, delete-orphan")
 
