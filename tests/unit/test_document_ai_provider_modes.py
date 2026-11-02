@@ -57,6 +57,9 @@ def test_production_can_start_with_document_ai_disabled():
         DEBUG=False,
         SECRET_KEY="b" * 64,
         SEED_DEMO_USERS=False,
+        NOTIFICATION_DELIVERY_MODE="smtp",
+        SMTP_HOST="smtp.example.com",
+        PUBLIC_APP_URL="https://app.example.com",
         DOCUMENT_AI_PROVIDER_MODE="disabled",
     )
     assert settings.DOCUMENT_AI_PROVIDER_MODE == "disabled"
