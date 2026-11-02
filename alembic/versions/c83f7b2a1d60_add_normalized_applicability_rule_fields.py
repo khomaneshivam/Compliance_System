@@ -61,6 +61,13 @@ def upgrade() -> None:
         batch_op.alter_column(
             "fail_explanation_template", existing_type=sa.Text(), nullable=False
         )
+        # Retain legacy data but permit newly normalized rows to omit retired fields.
+        batch_op.alter_column(
+            "rule_logic", existing_type=sa.JSON(), nullable=True
+        )
+        batch_op.alter_column(
+            "rationale_template", existing_type=sa.Text(), nullable=True
+        )
 
 
 def downgrade() -> None:
