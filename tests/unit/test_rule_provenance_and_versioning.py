@@ -349,7 +349,7 @@ def test_statutory_provenance_and_finding_trace_in_detail_service(db_session: Se
     assert detail is not None
     assert detail.provenance is not None
     assert detail.provenance.act_title is not None
-    assert detail.provenance.source_verification_status in ("VERIFIED", "UNVERIFIED_DEMO")
+    assert detail.provenance.source_verification_status == "PROPOSED"
     assert detail.applicability is not None
     assert detail.applicability.rule_version >= 1
 
