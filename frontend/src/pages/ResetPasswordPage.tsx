@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
 export const ResetPasswordPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const initialToken = useMemo(() => searchParams.get('token') || '', [searchParams]);
+  const initialToken = useMemo(
+    () => new URLSearchParams(location.hash.replace(/^#/, '')).get('token') || '',
+    [location.hash],
+  );
   const [token, setToken] = useState(initialToken);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
