@@ -40,6 +40,7 @@ class RegulatoryAct(TimestampedModel):
     # Legacy act metadata is retained during the transition from the initial schema.
     code: Mapped[Optional[str]] = mapped_column(String(50), unique=True, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enactment_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str] = mapped_column(String(100), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
