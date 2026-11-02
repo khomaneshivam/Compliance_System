@@ -4,7 +4,7 @@ Plant Profile and Equipment Asset Models
 
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, Numeric, Date, DateTime, ForeignKey, JSON, func
+from sqlalchemy import String, Integer, Numeric, Float, Date, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel, utc_now
 
@@ -40,13 +40,23 @@ class PlantProfile(TimestampedModel):
 
 class PlantEquipment(TimestampedModel):
     __tablename__ = "plant_equipment"
-    
+
     plant_id: Mapped[str] = mapped_column(String(36), ForeignKey("plants.id", ondelete="CASCADE"), nullable=False, index=True)
-    equipment_type: Mapped[str] = mapped_column(String(50), nullable=False)  # BOILER, PRESSURE_VESSEL, DG_SET, ETP, CHIMNEY
+    equipment_type: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    # Normalized asset identifier; legacy identifier remains stored separately.
     tag_number: Mapped[str] = mapped_column(String(100), nullable=False)
-    capacity: Mapped[str] = mapped_column(String(100), nullable=False)
+    identifier: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Human-readable capacity is used by current UI/API. Original numeric
+    # capacity and unit remain available for calculations and historical fidelity.
+    capacity: Mapped[Optional[str]] = mapped_column("capacity_display", String(100), nullable=True)
+    capacity_numeric: Mapped[Optional[float]] = mapped_column("capacity", Float, nullable=True)
+    capacity_unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    operating_parameters: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+
     manufacturer: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     installation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    
+
     # Relationships
     plant: Mapped["Plant"] = relationship("Plant", back_populates="equipment")
