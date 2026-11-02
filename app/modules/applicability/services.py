@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_
 
+from app.core.config import settings
 from app.core.exceptions import (
     EntityNotFoundError,
     TenantAccessDeniedError,
@@ -63,33 +64,64 @@ def assemble_company_facts(db: Session, plant: Plant) -> Dict[str, Any]:
     profile_stmt = select(PlantProfile).where(PlantProfile.plant_id == plant.id)
     profile = db.scalars(profile_stmt).first()
 
+    # Only verified customer facts may drive production decisions. Demo fixtures
+    # remain available to the development/test suite but never in staging/production.
+    profile_is_trusted = bool(
+        profile
+        and (
+            profile.profile_status == "VERIFIED"
+            or (
+                profile.profile_status == "DEMO_FIXTURE"
+                and settings.ENVIRONMENT in ("development", "test")
+            )
+        )
+    )
+
     if profile:
+        facts["profile_status"] = profile.profile_status
+
+    if profile_is_trusted:
         facts.update({
             "industry_category": profile.industry_category,
             "sector": profile.sector,
             "employee_count": profile.employee_count,
             "contract_labour_count": profile.contract_labour_count,
-            "total_workers": (profile.employee_count or 0) + (profile.contract_labour_count or 0),
-            "built_up_area_sqm": float(profile.built_up_area_sqm or 0.0),
-            "capital_investment_inr": float(profile.capital_investment_inr or 0.0),
-            "connected_power_kw": float(profile.connected_power_kw or 0.0),
-            "dg_set_capacity_kva": float(profile.dg_set_capacity_kva or 0.0),
-            "hazardous_waste_tpa": float(profile.hazardous_waste_tpa or 0.0),
-            "effluent_discharge_kld": float(profile.effluent_discharge_kld or 0.0),
-            "boiler_count": profile.boiler_count or 0,
-            "steam_capacity_tph": float(profile.steam_capacity_tph or 0.0),
+            "total_workers": (
+                profile.employee_count + profile.contract_labour_count
+                if profile.employee_count is not None and profile.contract_labour_count is not None
+                else None
+            ),
+            "built_up_area_sqm": float(profile.built_up_area_sqm) if profile.built_up_area_sqm is not None else None,
+            "capital_investment_inr": float(profile.capital_investment_inr) if profile.capital_investment_inr is not None else None,
+            "connected_power_kw": float(profile.connected_power_kw) if profile.connected_power_kw is not None else None,
+            "dg_set_capacity_kva": float(profile.dg_set_capacity_kva) if profile.dg_set_capacity_kva is not None else None,
+            "hazardous_waste_tpa": float(profile.hazardous_waste_tpa) if profile.hazardous_waste_tpa is not None else None,
+            "effluent_discharge_kld": float(profile.effluent_discharge_kld) if profile.effluent_discharge_kld is not None else None,
+            "boiler_count": profile.boiler_count,
+            "steam_capacity_tph": float(profile.steam_capacity_tph) if profile.steam_capacity_tph is not None else None,
         })
         if profile.raw_attributes:
             facts.update(profile.raw_attributes)
 
-    # Equipment facts
+    # Unverified or incomplete profile fields remain explicitly unknown.
+    # Positive equipment registrations prove presence; absence from an incomplete
+    # inventory must not be interpreted as proof of non-existence.
     equip_stmt = select(PlantEquipment).where(PlantEquipment.plant_id == plant.id)
     equipment_items = list(db.scalars(equip_stmt).all())
     equipment_types = [e.equipment_type for e in equipment_items]
-    facts["equipment_types"] = equipment_types
-    facts["has_boiler"] = "BOILER" in equipment_types or facts.get("boiler_count", 0) > 0
-    facts["has_dg_set"] = "DG_SET" in equipment_types or facts.get("dg_set_capacity_kva", 0) > 0
-    facts["has_etp"] = "ETP" in equipment_types or facts.get("effluent_discharge_kld", 0) > 0
+    facts["equipment_types"] = equipment_types if equipment_types else None
+
+    boiler_count = facts.get("boiler_count")
+    dg_capacity = facts.get("dg_set_capacity_kva")
+    facts["has_boiler"] = (
+        True if "BOILER" in equipment_types
+        else (boiler_count > 0 if boiler_count is not None else None)
+    )
+    facts["has_dg_set"] = (
+        True if "DG_SET" in equipment_types
+        else (dg_capacity > 0 if dg_capacity is not None else None)
+    )
+    facts["has_etp"] = True if "ETP" in equipment_types else None
 
     return facts
 
