@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth, DEMO_USERS } from '../context/AuthContext';
+import { api } from '../services/api';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid work email address'),
@@ -35,6 +36,10 @@ export const AuthPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState<boolean>(false);
+  const [resetEmail, setResetEmail] = useState<string>('');
+  const [resetMessage, setResetMessage] = useState<string>('');
+  const [resetDebugToken, setResetDebugToken] = useState<string | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState<boolean>(false);
 
   const {
     register,
@@ -43,11 +48,17 @@ export const AuthPage: React.FC = () => {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: 'rohit.sharma@acme-mfg.in',
-      password: 'Password123!',
-      rememberMe: true,
-    },
+    defaultValues: import.meta.env.DEV
+      ? {
+          email: 'rohit.sharma@acme-mfg.in',
+          password: 'Password123!',
+          rememberMe: true,
+        }
+      : {
+          email: '',
+          password: '',
+          rememberMe: false,
+        },
   });
 
   const onSubmit = async (data: LoginFormData) => {
@@ -57,6 +68,22 @@ export const AuthPage: React.FC = () => {
       navigate(from, { replace: true });
     } catch (err: unknown) {
       setAuthError((err as Error).message || 'Invalid credentials. Please verify your email and password.');
+    }
+  };
+
+  const onResetRequest = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError(null);
+    setResetSubmitting(true);
+    try {
+      const result = await api.requestPasswordReset(resetEmail.trim());
+      setResetMessage(result.message);
+      setResetDebugToken(result.debug_token || null);
+      setResetSuccess(true);
+    } catch (err: unknown) {
+      setAuthError((err as Error).message || 'Unable to request password reset.');
+    } finally {
+      setResetSubmitting(false);
     }
   };
 
@@ -337,14 +364,27 @@ export const AuthPage: React.FC = () => {
               {resetSuccess ? (
                 <div style={{ textAlign: 'center', padding: '16px 0' }}>
                   <CheckCircle2 size={36} color="#059669" style={{ margin: '0 auto 12px' }} />
-                  <h3 style={{ fontSize: '15px', color: '#0f172a', marginBottom: '6px' }}>Recovery Link Sent</h3>
+                  <h3 style={{ fontSize: '15px', color: '#0f172a', marginBottom: '6px' }}>Check your email</h3>
                   <p style={{ fontSize: '12.5px', color: '#64748b', marginBottom: '16px' }}>
-                    If an account exists for that email, a password reset link has been dispatched.
+                    {resetMessage}
                   </p>
+                  {resetDebugToken && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/reset-password?token=${encodeURIComponent(resetDebugToken)}`)}
+                      className="btn btn-secondary"
+                      style={{ width: '100%', marginBottom: '10px' }}
+                    >
+                      Open development reset link
+                    </button>
+                  )}
                   <button
+                    type="button"
                     onClick={() => {
                       setMode('signin');
                       setResetSuccess(false);
+                      setResetDebugToken(null);
+                      setResetMessage('');
                     }}
                     className="btn btn-secondary"
                     style={{ width: '100%' }}
@@ -353,20 +393,19 @@ export const AuthPage: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setResetSuccess(true);
-                  }}
-                >
+                <form onSubmit={onResetRequest}>
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                    <label htmlFor="reset-email" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                       Your Registered Email Address
                     </label>
                     <input
+                      id="reset-email"
                       type="email"
                       placeholder="name@company.com"
+                      autoComplete="email"
                       required
+                      value={resetEmail}
+                      onChange={(event) => setResetEmail(event.target.value)}
                       style={{
                         width: '100%',
                         padding: '8px 12px',
@@ -379,10 +418,11 @@ export const AuthPage: React.FC = () => {
                   </div>
                   <button
                     type="submit"
+                    disabled={resetSubmitting}
                     className="btn btn-primary"
                     style={{ width: '100%', backgroundColor: '#059669', borderColor: '#059669' }}
                   >
-                    Send Password Reset Instructions
+                    {resetSubmitting ? 'Requesting reset…' : 'Send Password Reset Instructions'}
                   </button>
                 </form>
               )}
