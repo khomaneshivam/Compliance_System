@@ -105,7 +105,9 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("confirmed_value", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("confidence_band", sa.String(length=20), nullable=True))
         batch_op.add_column(
-            sa.Column("is_overridden", sa.Boolean(), server_default=sa.false(), nullable=False),
+            sa.Column("is_overridden", sa.Boolean(), server_default=sa.false(), nullable=False)
+        )
+        batch_op.add_column(
             sa.Column("is_current", sa.Boolean(), server_default=sa.true(), nullable=False)
         )
 
