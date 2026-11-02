@@ -20,7 +20,7 @@ class RegulatoryAuthority(TimestampedModel):
 
     # Legacy columns retained for backward compatibility with the initial schema.
     # Do not drop these until existing values are reconciled and archived.
-    jurisdiction: Mapped[str] = mapped_column(String(100), nullable=False)
+    jurisdiction: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     jurisdiction_level: Mapped[str] = mapped_column(
@@ -37,6 +37,9 @@ class RegulatoryAct(TimestampedModel):
     __tablename__ = "regulatory_acts"
     
     authority_id: Mapped[str] = mapped_column(String(36), ForeignKey("regulatory_authorities.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Legacy act metadata is retained during the transition from the initial schema.
+    code: Mapped[Optional[str]] = mapped_column(String(50), unique=True, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str] = mapped_column(String(100), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -54,9 +57,18 @@ class StatutoryRequirement(TimestampedModel):
     code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    # Retained legacy statutory fields: keep their values through model/schema transitions.
+    plain_language_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    statutory_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    penalty_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    standard_validity_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     obligation_type: Mapped[str] = mapped_column(String(50), nullable=False)  # LICENCE, CONSENT, CERTIFICATE, REGISTRATION, RETURN
-    validity_period_months: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
-    grace_period_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    validity_period_months: Mapped[int] = mapped_column(
+        Integer, default=12, server_default="12", nullable=False
+    )
+    grace_period_days: Mapped[int] = mapped_column(
+        Integer, default=30, server_default="30", nullable=False
+    )
     
     # Relationships
     act: Mapped["RegulatoryAct"] = relationship("RegulatoryAct", back_populates="requirements")
