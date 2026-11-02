@@ -9,13 +9,14 @@ describe('AIAssistantModal Component', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders with regulatory banner and statutory citations when open', () => {
+  it('renders with a preview notice and no fabricated statutory citations when open', () => {
     render(<AIAssistantModal isOpen={true} onClose={() => {}} />);
 
     expect(screen.getByText(/PlantProof Regulatory Assistant/i)).toBeInTheDocument();
     expect(screen.getByText(/AI Proposes, Humans Dispose/i)).toBeInTheDocument();
     expect(screen.getByText(/Operational Advisory/i)).toBeInTheDocument();
-    expect(screen.getByText(/The Factories Act, 1948/i)).toBeInTheDocument();
+    expect(screen.getByText(/preview/i)).toBeInTheDocument();
+    expect(screen.queryByText(/The Factories Act, 1948/i)).not.toBeInTheDocument();
   });
 
   it('allows clicking sample prompt questions', () => {
