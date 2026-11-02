@@ -95,6 +95,10 @@ def verify_plant_profile(
         )
     if profile.profile_status == "VERIFIED":
         raise ConflictError("This plant profile is already verified. Make a new revision before re-verification.")
+    if not profile.industry_category or not profile.sector:
+        raise ConflictError(
+            "Industry category and sector must be supplied before the plant profile can be verified."
+        )
 
     profile.profile_status = "VERIFIED"
     profile.verified_by_user_id = user.id
