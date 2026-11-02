@@ -77,7 +77,7 @@ def test_password_reset_is_generic_single_use_and_revokes_old_jwts(
 def test_password_reset_request_does_not_disclose_unknown_accounts(client):
     known = client.post(
         "/api/v1/auth/password-reset/request",
-        json={"email": "unknown-person-987654@example.test"},
+        json={"email": "unknown-person-987654@example.com"},
     )
     assert known.status_code == 202
     assert known.json()["message"] == (
