@@ -4,7 +4,7 @@ Plant Requirements Register and Evidence Link Models
 
 from datetime import datetime, date
 from typing import Optional, List
-from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, Text, UniqueConstraint, false
+from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, Text, UniqueConstraint, Float, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel, utc_now
 
