@@ -591,9 +591,6 @@ def approve_rule(db: Session, rule_id: str, user: User) -> ApplicabilityRule:
     rule.is_immutable = True
     rule.approved_by_user_id = user.id
     rule.approved_at = datetime.now(timezone.utc)
-    if rule.source_verification_status in ("PROPOSED", "UNVERIFIED_DEMO"):
-        rule.source_verification_status = "VERIFIED"
-
     record_audit_log(
         db,
         tenant_id=user.tenant_id,
@@ -642,7 +639,25 @@ def supersede_rule(db: Session, rule_id: str, request: RuleSupersedeRequest, use
         official_source_url=request.official_source_url or old_rule.official_source_url,
         source_document_id=request.source_document_id or old_rule.source_document_id,
         source_fingerprint=request.source_fingerprint or old_rule.source_fingerprint,
-        source_verification_status=request.source_verification_status or "VERIFIED",
+        source_verification_status=(
+            request.source_verification_status
+            or (
+                "PROPOSED"
+                if any(
+                    getattr(request, field_name) is not None
+                    and getattr(request, field_name) != getattr(old_rule, field_name)
+                    for field_name in (
+                        "publication_date",
+                        "instrument_identifier",
+                        "clause_reference",
+                        "official_source_url",
+                        "source_document_id",
+                        "source_fingerprint",
+                    )
+                )
+                else (old_rule.source_verification_status or "PROPOSED")
+            )
+        ),
     )
     db.add(new_rule)
     db.flush()
