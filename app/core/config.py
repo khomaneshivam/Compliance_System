@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "./storage/vault"
     MAX_UPLOAD_SIZE_BYTES: int = Field(default=25 * 1024 * 1024, ge=1024 * 1024)  # 25 MB
 
+    # Document AI: fixtures are permitted only in development/test. Production must
+    # use DISABLED until a real provider adapter is configured.
+    DOCUMENT_AI_PROVIDER_MODE: str = Field(
+        default="fixture",
+        description="fixture (development/test only), disabled, or live (requires a configured production adapter)",
+    )
+
     # Notifications & Alerts Delivery
     NOTIFICATION_DELIVERY_MODE: str = Field(
         default="test",
@@ -106,6 +113,18 @@ class Settings(BaseSettings):
     def validate_production_security(self) -> "Settings":
         env = (self.ENVIRONMENT or "").lower().strip()
         is_production = env in ("production", "staging")
+
+        ai_mode = (self.DOCUMENT_AI_PROVIDER_MODE or "").strip().lower()
+        if ai_mode not in ("fixture", "disabled", "live"):
+            raise ValueError("DOCUMENT_AI_PROVIDER_MODE must be fixture, disabled, or live.")
+        if ai_mode == "fixture" and env not in ("development", "test"):
+            raise ValueError(
+                "Unsafe configuration: synthetic document-AI fixtures are prohibited in staging and production."
+            )
+        if ai_mode == "live":
+            raise ValueError(
+                "No live document-AI adapter is currently configured. Use disabled mode until a reviewed provider adapter is installed."
+            )
 
         if is_production:
             # 1. Refuse unsafe debug settings
