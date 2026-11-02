@@ -103,13 +103,11 @@ Impact: synthetic fixture output can look like a real extraction result. In a co
 
 Required remediation: make provider mode explicit and environment-gated. In production, require a configured real provider or return `PROVIDER_NOT_CONFIGURED`; never create synthetic legal values. Mark fixture output as non-evidence in the database/API/UI and prevent it from being approved as real evidence.
 
-### P1 — Applicability type mismatch can resolve to FALSE
+### Applicability type mismatch — verified as handled for comparison conversion errors
 
-Evidence: `app/modules/applicability/engine.py` contains a type-comparison exception path that returns `False` on `ValueError` / `TypeError`.
+The current source was inspected after reconciling this audit against `app/modules/applicability/engine.py`. The active implementation returns `None` from `_compare()` for `ValueError` / `TypeError`; `_evaluate_leaf()` converts that result to `EvalResult.UNKNOWN`, adds the fact key to `missing_facts` and includes a type-mismatch explanation in the condition trace.
 
-Impact: invalid or incompatible data may become a negative applicability result instead of `UNKNOWN` / needs-review. This violates the required three-valued logic.
-
-Required remediation: return an explicit UNKNOWN result with a structured evaluation error and missing/invalid fact list. Add tests for incompatible types, absent values, malformed AST values and nested Kleene logic.
+This specific historical finding is **not a confirmed defect in the reviewed main commit** and is not included in the remediation list. Keep regression tests for numeric conversion errors and invalid fact types. Other unsupported AST/value combinations should be reviewed separately rather than assumed safe from this check.
 
 ### P1 — Notification ownership check is tenant-scoped, not recipient-scoped
 
