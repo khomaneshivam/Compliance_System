@@ -233,7 +233,10 @@ def test_tasks_lifecycle_and_controlled_state_machine(
 
 
 def test_reminders_scheduler_deduplication_and_test_adapter(
-    client: TestClient, auth_headers_tenant_a: dict, tenant_a_plant_id: str
+    client: TestClient,
+    auth_headers_tenant_a: dict,
+    auth_headers_viewer: dict,
+    tenant_a_plant_id: str,
 ):
     """Verifies reminder scanner, notification deduplication, preferences, and test adapter."""
     test_notification_adapter.clear()
@@ -296,7 +299,14 @@ def test_reminders_scheduler_deduplication_and_test_adapter(
     assert list_resp.status_code == 200
     assert list_resp.json()["unread_count"] > 0
 
-    # 6. Mark single notification read
+    # 6. A different user in the same tenant cannot mutate this private notification.
+    other_user_read = client.patch(
+        f"/api/v1/reminders/notifications/{notif['id']}/read",
+        headers=auth_headers_viewer,
+    )
+    assert other_user_read.status_code == 404
+
+    # The intended recipient can mark the notification as read.
     read_resp = client.patch(
         f"/api/v1/reminders/notifications/{notif['id']}/read",
         headers=auth_headers_tenant_a,
