@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = Field(default=None, description="SMTP authentication username")
     SMTP_PASSWORD: Optional[str] = Field(default=None, description="SMTP authentication password")
     SMTP_TLS: bool = Field(default=True, description="Enable TLS for SMTP connections")
+    PUBLIC_APP_URL: str = Field(
+        default="http://localhost:5173",
+        description="Public frontend origin used in invitation and account emails",
+    )
     EMAILS_FROM_EMAIL: str = Field(
         default="notifications@plantproof.internal",
         description="Sender email address for compliance notifications"
@@ -127,6 +131,15 @@ class Settings(BaseSettings):
             )
 
         if is_production:
+            delivery_mode = (self.NOTIFICATION_DELIVERY_MODE or "").strip().lower()
+            if delivery_mode != "smtp" or not self.SMTP_HOST:
+                raise ValueError(
+                    "Production/staging requires NOTIFICATION_DELIVERY_MODE=smtp and SMTP_HOST for secure invitation and notification delivery."
+                )
+            public_url = (self.PUBLIC_APP_URL or "").strip().lower()
+            if not public_url.startswith("https://"):
+                raise ValueError("Production/staging requires PUBLIC_APP_URL to use HTTPS.")
+
             # 1. Refuse unsafe debug settings
             if self.DEBUG:
                 raise ValueError(
