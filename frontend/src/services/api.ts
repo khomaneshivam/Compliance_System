@@ -192,7 +192,10 @@ class ApiService {
   async getPlants(): Promise<Plant[]> {
     try {
       return await this.request<Plant[]>('/plants');
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'plant-pune-01',
@@ -209,7 +212,10 @@ class ApiService {
   async getPlantProfile(plantId: string): Promise<PlantProfile> {
     try {
       return await this.request<PlantProfile>(`/plants/${plantId}/profile`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         id: 'profile-1',
         plantId,
@@ -299,7 +305,10 @@ class ApiService {
   async getRegulatorySources(): Promise<RegulatorySource[]> {
     try {
       return await this.request<RegulatorySource[]>('/regulatory/sources');
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'src-mpcb-01',
@@ -419,7 +428,10 @@ class ApiService {
         `/regulatory/sources/${sourceId}/poll?scenario=${encodeURIComponent(scenario)}`,
         { method: 'POST' }
       );
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return this.getRegulatoryChanges();
     }
   }
@@ -428,7 +440,10 @@ class ApiService {
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
     try {
       return await this.request<RegulatoryChangeReview[]>(`/regulatory/changes${query}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'chg-mpcb-2026-01',
@@ -487,7 +502,10 @@ class ApiService {
   async getRegulatoryChangeDetail(changeId: string): Promise<RegulatoryChangeReview> {
     try {
       return await this.request<RegulatoryChangeReview>(`/regulatory/changes/${changeId}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const items = await this.getRegulatoryChanges();
       const match = items.find((i) => i.id === changeId);
       if (match) return match;
@@ -510,7 +528,10 @@ class ApiService {
         method: 'PATCH',
         body: JSON.stringify(payload),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const item = await this.getRegulatoryChangeDetail(changeId);
       return { ...item, ...payload };
     }
@@ -531,7 +552,10 @@ class ApiService {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const item = await this.getRegulatoryChangeDetail(changeId);
       return {
         ...item,
@@ -546,7 +570,10 @@ class ApiService {
   async getRegulatoryChangeImpacts(changeId: string): Promise<RegulatoryChangeImpact[]> {
     try {
       return await this.request<RegulatoryChangeImpact[]>(`/regulatory/changes/${changeId}/impacts`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'imp-01',
@@ -588,7 +615,10 @@ class ApiService {
   async getRegulatoryChangeHistory(changeId: string): Promise<RegulatoryAuditLog[]> {
     try {
       return await this.request<RegulatoryAuditLog[]>(`/regulatory/changes/${changeId}/history`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'aud-01',
@@ -645,7 +675,10 @@ class ApiService {
     const qs = params.toString() ? `?${params.toString()}` : '';
     try {
       return await this.request<ComplianceDocumentItem[]>(`/documents${qs}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       // Fallback mock documents
       return [
         {
@@ -718,7 +751,10 @@ class ApiService {
   async getDocument(documentId: string): Promise<ComplianceDocumentItem> {
     try {
       return await this.request<ComplianceDocumentItem>(`/documents/${documentId}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         id: documentId,
         plant_id: 'mock-plant-1',
@@ -887,7 +923,10 @@ class ApiService {
   async getDocumentHistory(documentId: string): Promise<DocumentAuditLogItem[]> {
     try {
       return await this.request<DocumentAuditLogItem[]>(`/documents/${documentId}/history`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'aud-01',
@@ -936,7 +975,10 @@ class ApiService {
     });
     try {
       return await this.request<PaginatedRequirements>(`/requirements?${query.toString()}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const mockItems: RequirementDetailItem[] = [
         {
           id: 'req-01',
@@ -1097,7 +1139,10 @@ class ApiService {
     const query = plantId ? `?plant_id=${plantId}` : '';
     try {
       return await this.request<SavedViewPreset[]>(`/requirements/saved-views${query}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'all_applicable',
@@ -1127,7 +1172,10 @@ class ApiService {
   async getRequirementDetail(requirementId: string): Promise<RequirementDetailItem> {
     try {
       return await this.request<RequirementDetailItem>(`/requirements/${requirementId}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const all = await this.getRequirements();
       return all.items.find((r) => r.id === requirementId) || all.items[0];
     }
@@ -1302,7 +1350,10 @@ class ApiService {
         }
       });
       return await this.request<PaginatedReportJobs>(`/reports?${query.toString()}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         items: [
           {
@@ -1349,7 +1400,10 @@ class ApiService {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         id: `rep-job-${Date.now()}`,
         plant_id: payload.plant_id,
@@ -1508,7 +1562,10 @@ class ApiService {
           plant_id: plantId,
         }),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       // Deterministic fallback explanation
       return {
         rule_id: ruleId,
@@ -1531,7 +1588,10 @@ class ApiService {
   async getAdminUsers(): Promise<User[]> {
     try {
       return await this.request<User[]>('/auth/users');
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'user-rohit-01',
