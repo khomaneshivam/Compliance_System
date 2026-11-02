@@ -12,6 +12,7 @@ from datetime import date, datetime, timezone
 import pytest
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from app.core.database import SessionLocal
 from app.core.exceptions import EntityNotFoundError, ImmutableRecordError
@@ -37,6 +38,27 @@ from app.modules.applicability.schemas import (
 )
 from app.modules.requirements.services import RequirementsService
 from app.seed.demo_data import seed_master_data
+
+def test_rule_authors_cannot_self_declare_source_verified():
+    """Source authenticity verification must be independent from rule authoring/approval."""
+    with pytest.raises(ValidationError, match="cannot mark a regulatory source VERIFIED"):
+        RuleCreateRequest(
+            statutory_requirement_code="MPCB-CTO",
+            expression_ast={"field": "effluent_discharge_kld", "operator": "gt", "value": 10},
+            pass_explanation_template="Applies",
+            fail_explanation_template="Does not apply",
+            source_verification_status="VERIFIED",
+        )
+
+    with pytest.raises(ValidationError, match="cannot mark a regulatory source VERIFIED"):
+        RuleSupersedeRequest(
+            new_expression_ast={"field": "effluent_discharge_kld", "operator": "gt", "value": 5},
+            pass_explanation_template="Applies",
+            fail_explanation_template="Does not apply",
+            change_rationale="Rule interpretation updated",
+            source_verification_status="VERIFIED",
+        )
+
 
 
 @pytest.fixture(scope="module")
@@ -142,7 +164,8 @@ def test_rule_approval_enforces_immutability_and_supersedes_prior(db_session: Se
     assert approved.is_immutable is True
     assert approved.approved_by_user_id == admin_user.id
     assert approved.approved_at is not None
-    assert approved.source_verification_status == "VERIFIED"
+    # Rule approval is not proof that the cited legal source was independently verified.
+    assert approved.source_verification_status == "PROPOSED"
 
     # Prior active rule must now be SUPERSEDED
     db_session.refresh(prior_active)
