@@ -19,13 +19,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Rename the legacy FK column without dropping its data and add link attribution."""
-    with op.batch_alter_table("evidence_links", schema=None) as batch_op:
-        batch_op.alter_column(
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        op.execute(
+            sa.text(
+                "ALTER TABLE evidence_links "
+                "RENAME COLUMN compliance_document_id TO document_id"
+            )
+        )
+    else:
+        op.alter_column(
+            "evidence_links",
             "compliance_document_id",
             new_column_name="document_id",
             existing_type=sa.String(length=36),
             existing_nullable=False,
         )
+
+    # Keep the table-rebuild operation separate from the rename. This avoids
+    # SQLite batch reflection constructing indexes before the renamed column
+    # has entered the reflected table definition.
+    with op.batch_alter_table("evidence_links", schema=None) as batch_op:
         batch_op.add_column(sa.Column("linked_by_user_id", sa.String(length=36), nullable=True))
         batch_op.create_foreign_key(
             "fk_evidence_links_linked_by_user",
@@ -34,16 +48,25 @@ def upgrade() -> None:
             ["id"],
             ondelete="SET NULL",
         )
-        batch_op.create_index(
-            "ix_evidence_links_document_id",
-            ["document_id"],
-            unique=False,
-        )
-        batch_op.create_index(
-            "ix_evidence_links_linked_by_user_id",
-            ["linked_by_user_id"],
-            unique=False,
-        )
+
+    op.create_index(
+        "ix_evidence_links_plant_requirement_id",
+        "evidence_links",
+        ["plant_requirement_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_evidence_links_document_id",
+        "evidence_links",
+        ["document_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_evidence_links_linked_by_user_id",
+        "evidence_links",
+        ["linked_by_user_id"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
