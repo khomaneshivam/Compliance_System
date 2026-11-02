@@ -149,9 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [activePlantId]);
 
   const login = async (email: string, password?: string): Promise<boolean> => {
-    if (!password) {
-      throw new Error('Password is required.');
-    }
+    if (!password) throw new Error('Password is required.');
     const authenticated = await api.login(email, password);
     setUser(authenticated.user);
     setActivePlantId(authenticated.user.plantIds[0] || '');
