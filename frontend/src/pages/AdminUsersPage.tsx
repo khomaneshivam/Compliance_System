@@ -536,27 +536,6 @@ export const AdminUsersPage: React.FC = () => {
                 </select>
               </div>
 
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  Facility Scope *
-                </label>
-                <select
-                  {...register('plantScope')}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    backgroundColor: '#ffffff',
-                  }}
-                >
-                  <option value="plant-pune-01">Acme Pune Manufacturing Unit (Maharashtra)</option>
-                  <option value="plant-vapi-02">Acme Vapi Chemical Plant (Gujarat)</option>
-                  <option value="all-plants">All Corporate Facilities</option>
-                </select>
-              </div>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button
                   type="button"
