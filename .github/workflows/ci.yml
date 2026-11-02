@@ -46,6 +46,9 @@ jobs:
       - name: Upgrade an empty database to Alembic head
         run: python -m alembic upgrade head
 
+      - name: Check ORM and migration schema parity
+        run: python -m alembic check
+
       - name: Run backend test suite
         run: python -m pytest -q
 
