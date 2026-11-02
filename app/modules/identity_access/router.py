@@ -119,7 +119,7 @@ def request_password_reset(
     db.commit()
     db.refresh(reset_record)
 
-    reset_url = f"{settings.PUBLIC_APP_URL.rstrip('/')}/reset-password?token={quote(raw_token)}"
+    reset_url = f"{settings.PUBLIC_APP_URL.rstrip('/')}/reset-password#token={quote(raw_token)}"
     email_body = (
         f"Hello {user.full_name},\n\n"
         "A password reset was requested for your PlantProof account.\n"
@@ -346,7 +346,7 @@ def invite_user(
     db.refresh(invitation)
 
     invitation_url = (
-        f"{settings.PUBLIC_APP_URL.rstrip('/')}/accept-invitation?token={quote(raw_token)}"
+        f"{settings.PUBLIC_APP_URL.rstrip('/')}/accept-invitation#token={quote(raw_token)}"
     )
     email_body = (
         f"Hello {invitation.full_name},\n\n"
