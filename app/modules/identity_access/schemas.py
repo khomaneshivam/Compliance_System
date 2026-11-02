@@ -55,6 +55,21 @@ class AcceptInvitationRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetRequestResponse(BaseModel):
+    message: str
+    # Only returned in development/test to support local testing.
+    debug_token: Optional[str] = None
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 class UserListItem(BaseModel):
     id: str
     email: str
