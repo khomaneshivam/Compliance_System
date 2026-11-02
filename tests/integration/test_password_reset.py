@@ -2,15 +2,21 @@
 
 from sqlalchemy import select
 
-from app.models.tenancy import UserPasswordResetToken
+from app.models.tenancy import User, UserPasswordResetToken
+
+
+def _get_seeded_admin(db_session):
+    user = db_session.scalar(select(User).where(User.email == "amit.jadhav@acme-mfg.in"))
+    assert user is not None, "Expected the seeded tenant administrator for password-reset tests."
+    return user
 
 
 def test_password_reset_is_generic_single_use_and_revokes_old_jwts(
     client,
     db_session,
-    admin_user,
     auth_headers_admin,
 ):
+    admin_user = _get_seeded_admin(db_session)
     request_response = client.post(
         "/api/v1/auth/password-reset/request",
         json={"email": admin_user.email},
@@ -89,8 +95,8 @@ def test_password_reset_request_does_not_disclose_unknown_accounts(client):
 def test_new_reset_request_revokes_previous_pending_token(
     client,
     db_session,
-    admin_user,
 ):
+    admin_user = _get_seeded_admin(db_session)
     first = client.post(
         "/api/v1/auth/password-reset/request",
         json={"email": admin_user.email},
