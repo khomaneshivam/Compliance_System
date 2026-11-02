@@ -11,7 +11,10 @@ from app.models.base import TimestampedModel
 
 class ComplianceTask(TimestampedModel):
     __tablename__ = "compliance_tasks"
-    
+
+    # Retain the legacy tenant FK as a first-class scope key. It must always
+    # equal the tenant that owns the referenced plant.
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     plant_id: Mapped[str] = mapped_column(String(36), ForeignKey("plants.id", ondelete="CASCADE"), nullable=False, index=True)
     plant_requirement_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("plant_requirements.id", ondelete="SET NULL"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
