@@ -17,7 +17,9 @@ class RegulatoryAuthority(TimestampedModel):
     
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    jurisdiction_level: Mapped[str] = mapped_column(String(20), nullable=False, default="STATE")  # CENTRAL, STATE, LOCAL
+    jurisdiction_level: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="STATE", server_default="STATE"
+    )  # CENTRAL, STATE, LOCAL
     jurisdiction_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("jurisdictions.id", ondelete="SET NULL"), nullable=True)
     website_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
