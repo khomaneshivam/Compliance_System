@@ -371,7 +371,7 @@ export const AuthPage: React.FC = () => {
                   {resetDebugToken && (
                     <button
                       type="button"
-                      onClick={() => navigate(`/reset-password?token=${encodeURIComponent(resetDebugToken)}`)}
+                      onClick={() => navigate(`/reset-password#token=${encodeURIComponent(resetDebugToken)}`)}
                       className="btn btn-secondary"
                       style={{ width: '100%', marginBottom: '10px' }}
                     >
