@@ -351,3 +351,48 @@ def test_statutory_provenance_and_finding_trace_in_detail_service(db_session: Se
     assert detail.provenance.source_verification_status in ("VERIFIED", "UNVERIFIED_DEMO")
     assert detail.applicability is not None
     assert detail.applicability.rule_version >= 1
+
+
+
+def test_requirement_detail_does_not_invent_legal_provenance(db_session: Session, admin_user: User):
+    """Missing legal citations remain absent; no inferred clause, Gazette number or URL is emitted."""
+    from app.models.requirements import PlantRequirement
+
+    tenant = db_session.get(Tenant, admin_user.tenant_id)
+    requirement = db_session.scalars(
+        select(StatutoryRequirement).where(StatutoryRequirement.code == "MPCB-CTO")
+    ).first()
+    assert tenant is not None
+    assert requirement is not None
+
+    plant = Plant(
+        tenant_id=tenant.id,
+        name="Provenance Missing-Source Test Plant",
+        code="MH-PROV-MISSING-01",
+        jurisdiction="Maharashtra",
+        district="Pune",
+        pincode="411001",
+    )
+    db_session.add(plant)
+    db_session.flush()
+
+    plant_requirement = PlantRequirement(
+        plant_id=plant.id,
+        statutory_requirement_id=requirement.id,
+        rule_version_id=None,
+        applicability_status="NEEDS_REVIEW",
+        applicability_rationale="Test record without a published source reference.",
+        evidence_status="MISSING",
+    )
+    db_session.add(plant_requirement)
+    db_session.flush()
+
+    detail = RequirementsService().get_requirement_detail(
+        db_session, admin_user, plant_requirement.id
+    )
+
+    assert detail.provenance is not None
+    assert detail.provenance.section_clause is None
+    assert detail.provenance.gazette_reference is None
+    assert detail.provenance.official_source_url is None
+    assert detail.provenance.is_verified is False
