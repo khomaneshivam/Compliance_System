@@ -4,7 +4,7 @@ Plant Profile and Equipment Asset Models
 
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, Numeric, Date, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Integer, Numeric, Date, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel, utc_now
 
@@ -26,7 +26,13 @@ class PlantProfile(TimestampedModel):
     boiler_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     steam_capacity_tph: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0, nullable=False)
     raw_attributes: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        server_default=func.now(),
+        nullable=False,
+    )
     
     # Relationships
     plant: Mapped["Plant"] = relationship("Plant", back_populates="profile")
