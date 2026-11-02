@@ -260,6 +260,7 @@ def test_unapproved_rules_are_never_evaluated(db_session: Session, admin_user: U
 
         profile = PlantProfile(
             plant_id=plant.id,
+            profile_status="DEMO_FIXTURE",
             industry_category="RED",
             boiler_count=2,
             steam_capacity_tph=12.0,
