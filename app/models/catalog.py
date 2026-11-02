@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class RegulatoryAuthority(TimestampedModel):
     __tablename__ = "regulatory_authorities"
     
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Legacy columns retained for backward compatibility with the initial schema.
@@ -54,7 +54,7 @@ class StatutoryRequirement(TimestampedModel):
     __tablename__ = "statutory_requirements"
     
     act_id: Mapped[str] = mapped_column(String(36), ForeignKey("regulatory_acts.id", ondelete="CASCADE"), nullable=False, index=True)
-    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     # Retained legacy statutory fields: keep their values through model/schema transitions.
