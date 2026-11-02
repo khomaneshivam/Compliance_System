@@ -32,7 +32,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove the columns introduced by this revision."""
-    with op.batch_alter_table("regulatory_authorities", schema=None) as batch_op:
-        batch_op.drop_column("website_url")
-        batch_op.drop_column("jurisdiction_level")
+    """This revision is forward-only to preserve migrated data and historical provenance."""
+    raise RuntimeError(
+        "This migration is intentionally irreversible. Restore a verified backup or "
+        "create a forward repair migration; do not drop retained data."
+    )
