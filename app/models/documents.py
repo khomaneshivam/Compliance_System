@@ -32,7 +32,7 @@ class ComplianceDocument(TimestampedModel):
     
     # Original metadata & Private vault storage
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    storage_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     storage_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -66,6 +66,17 @@ class ComplianceDocument(TimestampedModel):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
+    # Legacy columns retained from the initial compliance-document schema.
+    # Their values remain available while historical files are reconciled into the vault.
+    file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    extraction_confidence: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    ocr_extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    valid_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    valid_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    issuing_authority: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    certificate_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Relationships
     document_type: Mapped[Optional["DocumentType"]] = relationship("DocumentType")
     plant: Mapped["Plant"] = relationship("Plant")
@@ -84,22 +95,33 @@ class ExtractedField(TimestampedModel):
     verbatim snippet, and confidence band.
     """
     __tablename__ = "extracted_fields"
-    
+
     document_id: Mapped[str] = mapped_column(String(36), ForeignKey("compliance_documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    field_key: Mapped[str] = mapped_column(String(100), nullable=False)  # certificate_number, valid_until, authority, etc.
-    extracted_value: Mapped[str] = mapped_column(Text, nullable=False)
-    confirmed_value: Mapped[str] = mapped_column(Text, nullable=False)
-    
-    confidence_score: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False, default=0.900)
-    confidence_band: Mapped[str] = mapped_column(String(20), nullable=False, default="HIGH")  # HIGH, MEDIUM, LOW
-    
+
+    # New normalized field identity and human-confirmed value. Existing records
+    # may not have a trustworthy mapping/confirmation, so unknown stays NULL.
+    field_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    extracted_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    confirmed_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1.0")
+    confidence_band: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     source_page: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source_snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    field_type: Mapped[str] = mapped_column(String(50), default="string", nullable=False)  # date, identifier, authority, string, numeric
-    
-    is_overridden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    field_type: Mapped[str] = mapped_column(String(50), default="string", nullable=False)
+
+    is_overridden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     is_mandatory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    
+
+    # Legacy field provenance retained from the original extraction schema.
+    field_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    bounding_box: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    verified_by_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Relationships
     document: Mapped["ComplianceDocument"] = relationship("ComplianceDocument", back_populates="extracted_fields")
 
@@ -109,13 +131,18 @@ class ValidationCheck(TimestampedModel):
     Deterministic rule-based consistency check applied after extraction.
     """
     __tablename__ = "validation_checks"
-    
+
     document_id: Mapped[str] = mapped_column(String(36), ForeignKey("compliance_documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    check_code: Mapped[str] = mapped_column(String(50), nullable=False)  # DOC_TYPE_MATCH, VALID_DATE_WINDOW, CERT_FORMAT_VALID, AUTHORITY_RECOGNIZED, NO_EXPIRY_PERMANENT
+    check_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     check_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PASSED")  # PASSED, FAILED, WARNING
+    status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
+    # Legacy check state is retained until historical status/severity mappings
+    # have been reviewed and normalized.
+    check_status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING", server_default="PENDING")
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="MEDIUM", server_default="MEDIUM")
+
     # Relationships
     document: Mapped["ComplianceDocument"] = relationship("ComplianceDocument", back_populates="validation_checks")
 
