@@ -4,7 +4,7 @@ Plant Profile and Equipment Asset Models
 
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, Numeric, Float, Date, DateTime, ForeignKey, JSON, func, CheckConstraint
+from sqlalchemy import String, Integer, Numeric, Float, Date, DateTime, ForeignKey, JSON, func, CheckConstraint, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel, utc_now
 
