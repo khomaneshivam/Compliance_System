@@ -123,6 +123,13 @@ def upgrade() -> None:
             nullable=False,
             server_default="MISSING",
         )
+        # New normalized records may omit the retired legacy status; historic
+        # values were retained and used to backfill evidence_status above.
+        batch_op.alter_column(
+            "compliance_status",
+            existing_type=sa.String(length=50),
+            nullable=True,
+        )
         batch_op.alter_column(
             "is_custom",
             existing_type=sa.Boolean(),
