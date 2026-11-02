@@ -28,14 +28,15 @@ def upgrade() -> None:
             nullable=True,
         )
 
-    # Keep legacy code/description while adding the current short_name field.
+    # Keep legacy code, description and enactment_year columns in place.
+    # Add normalized short_name/year fields rather than renaming or dropping history.
     with op.batch_alter_table("regulatory_acts", schema=None) as batch_op:
         batch_op.add_column(sa.Column("short_name", sa.String(length=100), nullable=True))
+        batch_op.add_column(sa.Column("year", sa.Integer(), nullable=True))
         batch_op.alter_column(
             "enactment_year",
-            new_column_name="year",
             existing_type=sa.Integer(),
-            nullable=False,
+            nullable=True,
         )
         batch_op.alter_column(
             "code",
@@ -50,12 +51,20 @@ def upgrade() -> None:
         WHERE short_name IS NULL OR TRIM(short_name) = ''
         """
     )
+    op.execute(
+        """
+        UPDATE regulatory_acts
+        SET year = enactment_year
+        WHERE year IS NULL
+        """
+    )
     with op.batch_alter_table("regulatory_acts", schema=None) as batch_op:
         batch_op.alter_column(
             "short_name",
             existing_type=sa.String(length=100),
             nullable=False,
         )
+        batch_op.alter_column("year", existing_type=sa.Integer(), nullable=False)
         batch_op.create_index("ix_regulatory_acts_authority_id", ["authority_id"], unique=False)
 
     # Add the normalized current requirement fields and backfill from retained
