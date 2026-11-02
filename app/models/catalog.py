@@ -17,6 +17,12 @@ class RegulatoryAuthority(TimestampedModel):
     
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Legacy columns retained for backward compatibility with the initial schema.
+    # Do not drop these until existing values are reconciled and archived.
+    jurisdiction: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     jurisdiction_level: Mapped[str] = mapped_column(
         String(20), nullable=False, default="STATE", server_default="STATE"
     )  # CENTRAL, STATE, LOCAL
