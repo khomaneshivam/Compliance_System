@@ -27,7 +27,7 @@ class PlantProfile(TimestampedModel):
     effluent_discharge_kld: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     boiler_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     steam_capacity_tph: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    raw_attributes: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    raw_attributes: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
     profile_status: Mapped[str] = mapped_column(
         String(20), default="INCOMPLETE", server_default="INCOMPLETE", nullable=False
