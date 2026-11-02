@@ -83,45 +83,80 @@ class ApiService {
     }
   }
 
-  // Auth Endpoints
+  private mapApiUser(raw: {
+    id: string;
+    email: string;
+    full_name?: string;
+    fullName?: string;
+    role: User['role'];
+    tenant_id?: string;
+    tenantId?: string;
+    tenant_name?: string;
+    tenantName?: string;
+    plant_ids?: string[];
+    plantIds?: string[];
+  }): User {
+    return {
+      id: raw.id,
+      email: raw.email,
+      fullName: raw.full_name ?? raw.fullName ?? '',
+      role: raw.role,
+      tenantId: raw.tenant_id ?? raw.tenantId ?? '',
+      tenantName: raw.tenant_name ?? raw.tenantName,
+      plantIds: raw.plant_ids ?? raw.plantIds ?? [],
+    };
+  }
+
+  // Auth endpoints use the backend as the only authority. No mock credential fallback.
   async login(email: string, password: string): Promise<{ access_token: string; user: User }> {
-    try {
-      const res = await this.request<{ access_token: string; user: User }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      this.setToken(res.access_token);
-      return res;
-    } catch {
-      // Mock fallback for instant local preview
-      const mockUser: User = {
-        id: 'mock-user-1',
-        email,
-        fullName: email.includes('priya') ? 'Priya Deshmukh' : 'Rohit Sharma',
-        role: email.includes('priya') ? 'EHS_MANAGER' : 'PLANT_MANAGER',
-        tenantId: 'mock-tenant-1',
-        tenantName: 'Acme Manufacturing Group',
-        plantIds: ['mock-plant-1'],
-      };
-      this.setToken('mock-token');
-      return { access_token: 'mock-token', user: mockUser };
-    }
+    const res = await this.request<{
+      access_token: string;
+      user: Parameters<ApiService['mapApiUser']>[0];
+    }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    this.setToken(res.access_token);
+    return { access_token: res.access_token, user: this.mapApiUser(res.user) };
   }
 
   async getCurrentUser(): Promise<User> {
-    try {
-      return await this.request<User>('/auth/me');
-    } catch {
-      return {
-        id: 'mock-user-1',
-        email: 'rohit.sharma@acme-mfg.in',
-        fullName: 'Rohit Sharma',
-        role: 'PLANT_MANAGER',
-        tenantId: 'mock-tenant-1',
-        tenantName: 'Acme Manufacturing Group',
-        plantIds: ['mock-plant-1'],
-      };
+    const raw = await this.request<Parameters<ApiService['mapApiUser']>[0]>('/auth/me');
+    return this.mapApiUser(raw);
+  }
+
+  async acceptInvitation(token: string, password: string): Promise<User> {
+    const response = await fetch(`${API_BASE_URL}/auth/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.detail || `Invitation acceptance failed (HTTP ${response.status})`);
     }
+    return this.mapApiUser(payload);
+  }
+
+  async inviteUser(payload: {
+    email: string;
+    full_name: string;
+    role: string;
+    plant_ids?: string[];
+  }): Promise<{
+    invitation_id: string;
+    email: string;
+    role: string;
+    status: string;
+    delivery_status: string;
+    expires_at: string;
+    invitation_url?: string;
+    debug_token?: string;
+  }> {
+    return await this.request('/auth/users/invite', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   // Plants Endpoints
