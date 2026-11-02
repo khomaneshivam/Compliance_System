@@ -29,7 +29,11 @@ from app.modules.documents.safeguards import (
 
 from app.modules.documents.storage import vault_storage
 from app.modules.documents.extractors import DocumentTextExtractor
-from app.modules.documents.ai_service import ai_extractor_provider, DocumentAIExtractionOutput
+from app.modules.documents.ai_service import (
+    ai_extractor_provider,
+    DocumentAIExtractionOutput,
+    DocumentAIUnavailableError,
+)
 
 
 class DocumentProcessingPipeline:
@@ -254,8 +258,16 @@ class DocumentProcessingPipeline:
             doc.extraction_status = "EXTRACTION_FAILED"
             doc.extraction_error = clean_error
             metadata = dict(doc.extracted_metadata or {})
-            metadata["error_category"] = category
-            metadata["provider_mode"] = "FAILED"
+            metadata["error_category"] = (
+                "PROVIDER_NOT_CONFIGURED"
+                if isinstance(e, DocumentAIUnavailableError)
+                else category
+            )
+            metadata["provider_mode"] = (
+                "DISABLED"
+                if isinstance(e, DocumentAIUnavailableError)
+                else "FAILED"
+            )
             doc.extracted_metadata = metadata
             self._record_audit(
                 db=db,
