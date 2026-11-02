@@ -1661,6 +1661,10 @@ class ApiService {
     prompt: string,
     plantId: string = 'plant-pune-01'
   ): Promise<AIAssistantMessage> {
+    // Retain the query in the method contract for the future live endpoint.
+    // No local preview branch interprets user prompts as legal advice.
+    void prompt;
+
     if (!import.meta.env.DEV) {
       throw new Error(
         'The live regulatory Q&A service is not configured. No source-grounded assistant is currently available in this environment.'
