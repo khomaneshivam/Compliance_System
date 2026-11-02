@@ -205,21 +205,11 @@ class RequirementsService:
         rule = db.get(ApplicabilityRule, req.rule_version_id) if req.rule_version_id else None
         rule_ver = rule.rule_version if rule else 1
 
-        section_clause = (
-            rule.clause_reference
-            if (rule and rule.clause_reference)
-            else (f"Section 25/26" if "consent" in (stat.title or "").lower() else "Section 7/8")
-        )
-        gazette_ref = (
-            rule.instrument_identifier
-            if (rule and rule.instrument_identifier)
-            else (f"Gazette Notification Pending" if rule else None)
-        )
-        source_url = (
-            rule.official_source_url
-            if (rule and rule.official_source_url)
-            else (f"https://{auth.code.lower() if auth else 'mpcb'}.gov.in/statutes")
-        )
+        # Never infer statutory citations or official URLs. Missing source metadata
+        # must remain visibly missing until an authoritative source is captured and reviewed.
+        section_clause = rule.clause_reference if rule else None
+        gazette_ref = rule.instrument_identifier if rule else None
+        source_url = rule.official_source_url if rule else None
         pub_date = rule.publication_date if rule else None
         source_status = rule.source_verification_status if rule else "UNVERIFIED_DEMO"
         is_verified = source_status == "VERIFIED"
@@ -231,7 +221,7 @@ class RequirementsService:
             act_short_name=act.short_name if act else None,
             act_year=act.year if act else None,
             jurisdiction=req.plant.jurisdiction if req.plant else None,
-            jurisdiction_level=auth.jurisdiction_level if auth else "STATE",
+            jurisdiction_level=auth.jurisdiction_level if auth else None,
             section_clause=section_clause,
             gazette_reference=gazette_ref,
             official_source_url=source_url,
