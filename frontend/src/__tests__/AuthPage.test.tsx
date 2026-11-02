@@ -36,8 +36,12 @@ describe('AuthPage Component', () => {
     // Click Accept Invite tab
     const inviteTab = screen.getByRole('button', { name: /Accept Invite/i });
     fireEvent.click(inviteTab);
-    expect(screen.getByText(/Invitation \/ Token Code/i)).toBeInTheDocument();
-    expect(screen.getByText(/Set Account Password/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Invitations are single-use and expire after 24 hours/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Enter Invitation Token/i })
+    ).toBeInTheDocument();
 
     // Click Password Reset tab
     const resetTab = screen.getByRole('button', { name: /Password Reset/i });
