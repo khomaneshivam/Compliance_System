@@ -44,6 +44,9 @@ def test_production_settings_reject_fixture_ai_even_with_strong_signing_secret()
             DEBUG=False,
             SECRET_KEY="a" * 64,
             SEED_DEMO_USERS=False,
+            NOTIFICATION_DELIVERY_MODE="smtp",
+            SMTP_HOST="smtp.example.com",
+            PUBLIC_APP_URL="https://app.example.com",
             DOCUMENT_AI_PROVIDER_MODE="fixture",
         )
 
