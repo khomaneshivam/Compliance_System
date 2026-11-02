@@ -4,7 +4,7 @@ Plant Requirements Register and Evidence Link Models
 
 from datetime import datetime, date
 from typing import Optional, List
-from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import String, Boolean, Date, DateTime, ForeignKey, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel, utc_now
 
@@ -29,7 +29,7 @@ class PlantRequirement(TimestampedModel):
 
     rule_version_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("applicability_rules.id", ondelete="SET NULL"), nullable=True)
     requirement_version_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("requirement_versions.id", ondelete="SET NULL"), nullable=True)
-    is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    is_custom: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     last_evaluated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=True)
     
     # Relationships
