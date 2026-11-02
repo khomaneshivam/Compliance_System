@@ -105,7 +105,8 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("confirmed_value", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("confidence_band", sa.String(length=20), nullable=True))
         batch_op.add_column(
-            sa.Column("is_overridden", sa.Boolean(), server_default=sa.false(), nullable=False)
+            sa.Column("is_overridden", sa.Boolean(), server_default=sa.false(), nullable=False),
+            sa.Column("is_current", sa.Boolean(), server_default=sa.true(), nullable=False)
         )
 
     # Validation: preserve old check_status and severity. The new status is
@@ -114,6 +115,7 @@ def upgrade() -> None:
     with op.batch_alter_table("validation_checks", schema=None) as batch_op:
         batch_op.add_column(sa.Column("check_code", sa.String(length=50), nullable=True))
         batch_op.add_column(sa.Column("status", sa.String(length=20), nullable=True))
+        batch_op.add_column(sa.Column("is_current", sa.Boolean(), server_default=sa.true(), nullable=False))
         batch_op.alter_column(
             "check_name",
             existing_type=sa.String(length=100),
