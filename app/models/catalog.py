@@ -84,6 +84,10 @@ class ApplicabilityRule(TimestampedModel):
     
     statutory_requirement_id: Mapped[str] = mapped_column(String(36), ForeignKey("statutory_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
     rule_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Legacy fields retained as nullable after normalization. Existing rows keep
+    # their original JSON/rationale; new rows write the normalized fields below.
+    rule_logic: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    rationale_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     expression_ast: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     pass_explanation_template: Mapped[str] = mapped_column(Text, nullable=False)
     fail_explanation_template: Mapped[str] = mapped_column(Text, nullable=False)
