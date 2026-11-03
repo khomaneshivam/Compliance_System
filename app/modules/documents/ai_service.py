@@ -294,4 +294,46 @@ class MockSyntheticDocumentAIProvider(DocumentAIProvider):
         )
 
 
-ai_extractor_provider = MockSyntheticDocumentAIProvider()
+class DocumentAIUnavailableError(RuntimeError):
+    """Raised when document extraction is intentionally disabled or unconfigured."""
+
+
+class DisabledDocumentAIProvider(DocumentAIProvider):
+    """Fail-closed provider used when no production OCR/AI integration is configured."""
+
+    provider_mode = "DISABLED"
+
+    def extract_document(
+        self,
+        pages: List[PageTextResult],
+        original_filename: str,
+    ) -> DocumentAIExtractionOutput:
+        raise DocumentAIUnavailableError(
+            "Document AI extraction is disabled because no approved live provider is configured."
+        )
+
+
+def build_document_ai_provider(mode: Optional[str] = None, environment: Optional[str] = None) -> DocumentAIProvider:
+    """Select a provider explicitly; synthetic values are never a production fallback."""
+    from app.core.config import settings
+
+    selected_mode = (mode or settings.DOCUMENT_AI_PROVIDER_MODE).strip().lower()
+    selected_environment = (environment or settings.ENVIRONMENT).strip().lower()
+
+    if selected_mode == "fixture":
+        if selected_environment not in ("development", "test"):
+            raise RuntimeError("Synthetic document-AI fixtures are prohibited outside development/test.")
+        return MockSyntheticDocumentAIProvider()
+
+    if selected_mode == "disabled":
+        return DisabledDocumentAIProvider()
+
+    if selected_mode == "live":
+        raise RuntimeError(
+            "DOCUMENT_AI_PROVIDER_MODE=live was requested, but no reviewed live provider adapter is registered."
+        )
+
+    raise ValueError(f"Unsupported document AI provider mode: {selected_mode}")
+
+
+ai_extractor_provider = build_document_ai_provider()

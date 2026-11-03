@@ -2,8 +2,9 @@
 Identity & Access Pydantic Schemas
 """
 
+from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
@@ -35,6 +36,38 @@ class UserInviteRequest(BaseModel):
     full_name: str
     role: str = "PLANT_MANAGER"
     plant_ids: List[str] = []
+
+
+class InvitationCreatedResponse(BaseModel):
+    invitation_id: str
+    email: EmailStr
+    role: str
+    status: str
+    delivery_status: str
+    expires_at: datetime
+    invitation_url: Optional[str] = None
+    # Only returned in development/test. Never returned in production.
+    debug_token: Optional[str] = None
+
+
+class AcceptInvitationRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetRequestResponse(BaseModel):
+    message: str
+    # Only returned in development/test to support local testing.
+    debug_token: Optional[str] = None
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    new_password: str = Field(min_length=12, max_length=128)
 
 
 class UserListItem(BaseModel):

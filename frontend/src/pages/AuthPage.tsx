@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth, DEMO_USERS } from '../context/AuthContext';
+import { api } from '../services/api';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid work email address'),
@@ -34,8 +35,11 @@ export const AuthPage: React.FC = () => {
   const [mode, setMode] = useState<'signin' | 'invite' | 'reset'>('signin');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [inviteSuccess, setInviteSuccess] = useState<boolean>(false);
   const [resetSuccess, setResetSuccess] = useState<boolean>(false);
+  const [resetEmail, setResetEmail] = useState<string>('');
+  const [resetMessage, setResetMessage] = useState<string>('');
+  const [resetDebugToken, setResetDebugToken] = useState<string | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState<boolean>(false);
 
   const {
     register,
@@ -44,11 +48,17 @@ export const AuthPage: React.FC = () => {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: 'rohit.sharma@acme-mfg.in',
-      password: 'Password123!',
-      rememberMe: true,
-    },
+    defaultValues: import.meta.env.DEV
+      ? {
+          email: 'rohit.sharma@acme-mfg.in',
+          password: 'Password123!',
+          rememberMe: true,
+        }
+      : {
+          email: '',
+          password: '',
+          rememberMe: false,
+        },
   });
 
   const onSubmit = async (data: LoginFormData) => {
@@ -58,6 +68,22 @@ export const AuthPage: React.FC = () => {
       navigate(from, { replace: true });
     } catch (err: unknown) {
       setAuthError((err as Error).message || 'Invalid credentials. Please verify your email and password.');
+    }
+  };
+
+  const onResetRequest = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError(null);
+    setResetSubmitting(true);
+    try {
+      const result = await api.requestPasswordReset(resetEmail.trim());
+      setResetMessage(result.message);
+      setResetDebugToken(result.debug_token || null);
+      setResetSuccess(true);
+    } catch (err: unknown) {
+      setAuthError((err as Error).message || 'Unable to request password reset.');
+    } finally {
+      setResetSubmitting(false);
     }
   };
 
@@ -318,77 +344,18 @@ export const AuthPage: React.FC = () => {
           )}
 
           {mode === 'invite' && (
-            <div>
-              {inviteSuccess ? (
-                <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                  <CheckCircle2 size={36} color="#059669" style={{ margin: '0 auto 12px' }} />
-                  <h3 style={{ fontSize: '15px', color: '#0f172a', marginBottom: '6px' }}>Invite Token Accepted!</h3>
-                  <p style={{ fontSize: '12.5px', color: '#64748b', marginBottom: '16px' }}>
-                    Your enterprise seat has been provisioned. You can now sign in with your credentials.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setMode('signin');
-                      setInviteSuccess(false);
-                    }}
-                    className="btn btn-primary"
-                    style={{ width: '100%' }}
-                  >
-                    Go to Sign In
-                  </button>
-                </div>
-              ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setInviteSuccess(true);
-                  }}
-                >
-                  <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                      Invitation / Token Code
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. INV-ACME-9481-PUNE"
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                  <div style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                      Set Account Password
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Minimum 8 characters"
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    style={{ width: '100%', marginTop: '8px', backgroundColor: '#059669', borderColor: '#059669' }}
-                  >
-                    Accept Invite & Activate Account
-                  </button>
-                </form>
-              )}
+            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+              <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, marginBottom: '18px' }}>
+                Invitations are single-use and expire after 24 hours. Open the secure link sent to your work email, or enter the invitation token on the acceptance page.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/accept-invitation')}
+                className="btn btn-primary"
+                style={{ width: '100%', backgroundColor: '#059669', borderColor: '#059669' }}
+              >
+                Enter Invitation Token
+              </button>
             </div>
           )}
 
@@ -397,14 +364,27 @@ export const AuthPage: React.FC = () => {
               {resetSuccess ? (
                 <div style={{ textAlign: 'center', padding: '16px 0' }}>
                   <CheckCircle2 size={36} color="#059669" style={{ margin: '0 auto 12px' }} />
-                  <h3 style={{ fontSize: '15px', color: '#0f172a', marginBottom: '6px' }}>Recovery Link Sent</h3>
+                  <h3 style={{ fontSize: '15px', color: '#0f172a', marginBottom: '6px' }}>Check your email</h3>
                   <p style={{ fontSize: '12.5px', color: '#64748b', marginBottom: '16px' }}>
-                    If an account exists for that email, a password reset link has been dispatched.
+                    {resetMessage}
                   </p>
+                  {resetDebugToken && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/reset-password#token=${encodeURIComponent(resetDebugToken)}`)}
+                      className="btn btn-secondary"
+                      style={{ width: '100%', marginBottom: '10px' }}
+                    >
+                      Open development reset link
+                    </button>
+                  )}
                   <button
+                    type="button"
                     onClick={() => {
                       setMode('signin');
                       setResetSuccess(false);
+                      setResetDebugToken(null);
+                      setResetMessage('');
                     }}
                     className="btn btn-secondary"
                     style={{ width: '100%' }}
@@ -413,20 +393,19 @@ export const AuthPage: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setResetSuccess(true);
-                  }}
-                >
+                <form onSubmit={onResetRequest}>
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                    <label htmlFor="reset-email" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                       Your Registered Email Address
                     </label>
                     <input
+                      id="reset-email"
                       type="email"
                       placeholder="name@company.com"
+                      autoComplete="email"
                       required
+                      value={resetEmail}
+                      onChange={(event) => setResetEmail(event.target.value)}
                       style={{
                         width: '100%',
                         padding: '8px 12px',
@@ -439,10 +418,11 @@ export const AuthPage: React.FC = () => {
                   </div>
                   <button
                     type="submit"
+                    disabled={resetSubmitting}
                     className="btn btn-primary"
                     style={{ width: '100%', backgroundColor: '#059669', borderColor: '#059669' }}
                   >
-                    Send Password Reset Instructions
+                    {resetSubmitting ? 'Requesting reset…' : 'Send Password Reset Instructions'}
                   </button>
                 </form>
               )}
@@ -450,59 +430,63 @@ export const AuthPage: React.FC = () => {
           )}
         </div>
 
-        {/* Demo Fast-Switch Section */}
-        <div
-          style={{
-            padding: '16px 24px',
-            backgroundColor: '#f8fafc',
-            borderTop: '1px solid #e2e8f0',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>
-            <UserCheck size={14} color="#059669" />
-            <span>Select Demo Role to Sign In Directly:</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {DEMO_USERS.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => handleDemoSelect(u.id, u.email)}
-                style={{
-                  padding: '7px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #e2e8f0',
-                  backgroundColor: '#ffffff',
-                  textAlign: 'left',
-                  fontSize: '12px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
-                }}
-                className="table-row-hover"
-              >
-                <div>
-                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{u.fullName}</span>
-                  <span style={{ color: '#64748b', marginLeft: '6px' }}>({u.email})</span>
-                </div>
-                <span
+        {import.meta.env.DEV && (
+          <>
+          {/* Demo Fast-Switch Section */}
+          <div
+            style={{
+              padding: '16px 24px',
+              backgroundColor: '#f8fafc',
+              borderTop: '1px solid #e2e8f0',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>
+              <UserCheck size={14} color="#059669" />
+              <span>Select Demo Role to Sign In Directly:</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {DEMO_USERS.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => handleDemoSelect(u.id, u.email)}
                   style={{
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    backgroundColor: '#ecfdf5',
-                    color: '#059669',
+                    padding: '7px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    textAlign: 'left',
+                    fontSize: '12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s ease',
                   }}
+                  className="table-row-hover"
                 >
-                  {u.role.replace(/_/g, ' ')}
-                </span>
-              </button>
-            ))}
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{u.fullName}</span>
+                    <span style={{ color: '#64748b', marginLeft: '6px' }}>({u.email})</span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: '#ecfdf5',
+                      color: '#059669',
+                    }}
+                  >
+                    {u.role.replace(/_/g, ' ')}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Security & Regulatory Note */}

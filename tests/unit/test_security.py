@@ -61,6 +61,9 @@ def test_settings_development_allows_convenient_defaults():
         DEBUG=True,
         SECRET_KEY="demo-insecure-secret-key-change-in-production-plantproof-compliance",
         SEED_DEMO_USERS=True,
+            NOTIFICATION_DELIVERY_MODE="smtp",
+            SMTP_HOST="smtp.example.test",
+            PUBLIC_APP_URL="https://app.example.test",
     )
     assert cfg.ENVIRONMENT == "development"
     assert cfg.DEBUG is True
@@ -77,6 +80,9 @@ def test_settings_production_rejects_placeholder_secret():
                 DEBUG=False,
                 SECRET_KEY=placeholder,
                 SEED_DEMO_USERS=False,
+                NOTIFICATION_DELIVERY_MODE="smtp",
+                SMTP_HOST="smtp.example.test",
+                PUBLIC_APP_URL="https://app.example.test",
             )
         err_msg = str(exc_info.value)
         assert (
@@ -93,6 +99,9 @@ def test_settings_production_rejects_short_secret():
             DEBUG=False,
             SECRET_KEY="short-secret-1234567890",
             SEED_DEMO_USERS=False,
+                NOTIFICATION_DELIVERY_MODE="smtp",
+                SMTP_HOST="smtp.example.test",
+                PUBLIC_APP_URL="https://app.example.test",
         )
     assert "Production environment must not use placeholder or weak JWT secret keys" in str(exc_info.value)
 
@@ -106,6 +115,9 @@ def test_settings_production_rejects_unsafe_debug():
             DEBUG=True,
             SECRET_KEY=secure_key,
             SEED_DEMO_USERS=False,
+                NOTIFICATION_DELIVERY_MODE="smtp",
+                SMTP_HOST="smtp.example.test",
+                PUBLIC_APP_URL="https://app.example.test",
         )
     assert "DEBUG must be set to False in production" in str(exc_info.value)
 
@@ -119,6 +131,9 @@ def test_settings_production_rejects_demo_users_seeding():
             DEBUG=False,
             SECRET_KEY=secure_key,
             SEED_DEMO_USERS=True,
+            NOTIFICATION_DELIVERY_MODE="smtp",
+            SMTP_HOST="smtp.example.test",
+            PUBLIC_APP_URL="https://app.example.test",
         )
     assert "SEED_DEMO_USERS must not be True in production" in str(exc_info.value)
 
@@ -131,6 +146,9 @@ def test_settings_production_accepts_valid_configuration():
         DEBUG=False,
         SECRET_KEY=secure_key,
         SEED_DEMO_USERS=False,
+                NOTIFICATION_DELIVERY_MODE="smtp",
+                SMTP_HOST="smtp.example.test",
+                PUBLIC_APP_URL="https://app.example.test",
     )
     assert cfg.ENVIRONMENT == "production"
     assert cfg.DEBUG is False

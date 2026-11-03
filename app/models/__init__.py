@@ -12,7 +12,7 @@ from app.models.master_data import (
     RegulationVersion,
     RequirementVersion,
 )
-from app.models.tenancy import Tenant, User, Plant
+from app.models.tenancy import Tenant, User, Plant, UserInvitation, UserPasswordResetToken
 from app.models.profile import PlantProfile, PlantEquipment
 from app.models.catalog import RegulatoryAuthority, RegulatoryAct, StatutoryRequirement, ApplicabilityRule
 from app.models.requirements import PlantRequirement, EvidenceLink
@@ -51,6 +51,8 @@ __all__ = [
     "Tenant",
     "User",
     "Plant",
+    "UserInvitation",
+    "UserPasswordResetToken",
     "PlantProfile",
     "PlantEquipment",
     "PlantRequirement",

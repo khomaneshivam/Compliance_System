@@ -36,10 +36,13 @@ documents_router = APIRouter(prefix="/documents", tags=["Document & Evidence Vau
 
 
 def get_document_provider_mode(doc: ComplianceDocument) -> str:
+    meta = doc.extracted_metadata or {}
+    provider_mode = meta.get("provider_mode")
+    if provider_mode == "DISABLED":
+        return "DISABLED"
     if doc.extraction_status == "EXTRACTION_FAILED":
         return "FAILED"
-    meta = doc.extracted_metadata or {}
-    return meta.get("provider_mode", "FIXTURE")
+    return provider_mode or "FIXTURE"
 
 
 def get_document_error_category(doc: ComplianceDocument) -> Optional[str]:

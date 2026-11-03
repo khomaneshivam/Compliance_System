@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "./storage/vault"
     MAX_UPLOAD_SIZE_BYTES: int = Field(default=25 * 1024 * 1024, ge=1024 * 1024)  # 25 MB
 
+    # Document AI: fixtures are permitted only in development/test. Production must
+    # use DISABLED until a real provider adapter is configured.
+    DOCUMENT_AI_PROVIDER_MODE: Optional[str] = Field(
+        default=None,
+        description="fixture (development/test only), disabled, or live (requires a configured production adapter); defaults by environment",
+    )
+
     # Notifications & Alerts Delivery
     NOTIFICATION_DELIVERY_MODE: str = Field(
         default="test",
@@ -72,6 +79,10 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = Field(default=None, description="SMTP authentication username")
     SMTP_PASSWORD: Optional[str] = Field(default=None, description="SMTP authentication password")
     SMTP_TLS: bool = Field(default=True, description="Enable TLS for SMTP connections")
+    PUBLIC_APP_URL: str = Field(
+        default="http://localhost:5173",
+        description="Public frontend origin used in invitation and account emails",
+    )
     EMAILS_FROM_EMAIL: str = Field(
         default="notifications@plantproof.internal",
         description="Sender email address for compliance notifications"
@@ -108,13 +119,12 @@ class Settings(BaseSettings):
         is_production = env in ("production", "staging")
 
         if is_production:
-            # 1. Refuse unsafe debug settings
+            # Preserve clear security failure messages before checking integration configuration.
             if self.DEBUG:
                 raise ValueError(
                     "Unsafe configuration: DEBUG must be set to False in production and staging environments."
                 )
 
-            # 2. Refuse known placeholder or default JWT signing secrets
             secret = (self.SECRET_KEY or "").strip()
             secret_lower = secret.lower()
             is_placeholder = (
@@ -128,12 +138,37 @@ class Settings(BaseSettings):
                     "Configure a high-entropy SECRET_KEY (at least 32 characters, e.g. via 'openssl rand -hex 32') in .env."
                 )
 
-            # 3. Refuse demo user provisioning in production
             if self.SEED_DEMO_USERS:
                 raise ValueError(
                     "Unsafe configuration: SEED_DEMO_USERS must not be True in production or staging environments. "
                     "Demo credentials must never be provisioned in durable production deployments."
                 )
+
+            delivery_mode = (self.NOTIFICATION_DELIVERY_MODE or "").strip().lower()
+            if delivery_mode != "smtp" or not self.SMTP_HOST:
+                raise ValueError(
+                    "Production/staging requires NOTIFICATION_DELIVERY_MODE=smtp and SMTP_HOST for secure invitation and notification delivery."
+                )
+            public_url = (self.PUBLIC_APP_URL or "").strip().lower()
+            if not public_url.startswith("https://"):
+                raise ValueError("Production/staging requires PUBLIC_APP_URL to use HTTPS.")
+
+        # Default to deterministic fixtures only in non-production environments.
+        # Production/staging default to disabled; no implicit synthetic extraction.
+        if not self.DOCUMENT_AI_PROVIDER_MODE:
+            self.DOCUMENT_AI_PROVIDER_MODE = "disabled" if is_production else "fixture"
+
+        ai_mode = (self.DOCUMENT_AI_PROVIDER_MODE or "").strip().lower()
+        if ai_mode not in ("fixture", "disabled", "live"):
+            raise ValueError("DOCUMENT_AI_PROVIDER_MODE must be fixture, disabled, or live.")
+        if ai_mode == "fixture" and is_production:
+            raise ValueError(
+                "Unsafe configuration: synthetic document-AI fixtures are prohibited in staging and production."
+            )
+        if ai_mode == "live":
+            raise ValueError(
+                "No live document-AI adapter is currently configured. Use disabled mode until a reviewed provider adapter is installed."
+            )
 
         return self
 

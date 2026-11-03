@@ -197,7 +197,16 @@ class RuleCreateRequest(BaseModel):
     official_source_url: Optional[str] = Field(None, description="Official government gazette or portal URL")
     source_document_id: Optional[str] = Field(None, description="ID of source regulatory document in intel vault")
     source_fingerprint: Optional[str] = Field(None, description="SHA-256 fingerprint of official source document")
-    source_verification_status: Optional[str] = Field("PROPOSED", description="PROPOSED, VERIFIED, or UNVERIFIED_DEMO")
+    source_verification_status: Optional[str] = Field(
+        "PROPOSED",
+        description="Source verification is performed by a separate source-review workflow; rule authors cannot self-declare VERIFIED.",
+    )
+
+    @model_validator(mode="after")
+    def prevent_self_verification(self):
+        if (self.source_verification_status or "").strip().upper() == "VERIFIED":
+            raise ValueError("A rule author cannot mark a regulatory source VERIFIED. Use the source-verification workflow.")
+        return self
 
 
 class RuleResponse(BaseModel):
@@ -238,6 +247,12 @@ class RuleSupersedeRequest(BaseModel):
     source_document_id: Optional[str] = None
     source_fingerprint: Optional[str] = None
     source_verification_status: Optional[str] = None
+
+    @model_validator(mode="after")
+    def prevent_self_verification(self):
+        if (self.source_verification_status or "").strip().upper() == "VERIFIED":
+            raise ValueError("A rule author cannot mark a regulatory source VERIFIED. Use the source-verification workflow.")
+        return self
 
 
 # ------------------------------------------------------------------------------

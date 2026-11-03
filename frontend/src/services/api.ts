@@ -31,7 +31,7 @@ import type {
   AIAssistantMessage,
 } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000/api/v1' : '/api/v1');
 
 class ApiService {
   private token: string | null = null;
@@ -83,52 +83,119 @@ class ApiService {
     }
   }
 
-  // Auth Endpoints
+  private mapApiUser(raw: {
+    id: string;
+    email: string;
+    full_name?: string;
+    fullName?: string;
+    role: User['role'];
+    tenant_id?: string;
+    tenantId?: string;
+    tenant_name?: string;
+    tenantName?: string;
+    plant_ids?: string[];
+    plantIds?: string[];
+  }): User {
+    return {
+      id: raw.id,
+      email: raw.email,
+      fullName: raw.full_name ?? raw.fullName ?? '',
+      role: raw.role,
+      tenantId: raw.tenant_id ?? raw.tenantId ?? '',
+      tenantName: raw.tenant_name ?? raw.tenantName,
+      plantIds: raw.plant_ids ?? raw.plantIds ?? [],
+    };
+  }
+
+  // Auth endpoints use the backend as the only authority. No mock credential fallback.
   async login(email: string, password: string): Promise<{ access_token: string; user: User }> {
-    try {
-      const res = await this.request<{ access_token: string; user: User }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      this.setToken(res.access_token);
-      return res;
-    } catch {
-      // Mock fallback for instant local preview
-      const mockUser: User = {
-        id: 'mock-user-1',
-        email,
-        fullName: email.includes('priya') ? 'Priya Deshmukh' : 'Rohit Sharma',
-        role: email.includes('priya') ? 'EHS_MANAGER' : 'PLANT_MANAGER',
-        tenantId: 'mock-tenant-1',
-        tenantName: 'Acme Manufacturing Group',
-        plantIds: ['mock-plant-1'],
-      };
-      this.setToken('mock-token');
-      return { access_token: 'mock-token', user: mockUser };
-    }
+    const res = await this.request<{
+      access_token: string;
+      user: Parameters<ApiService['mapApiUser']>[0];
+    }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    this.setToken(res.access_token);
+    return { access_token: res.access_token, user: this.mapApiUser(res.user) };
   }
 
   async getCurrentUser(): Promise<User> {
-    try {
-      return await this.request<User>('/auth/me');
-    } catch {
-      return {
-        id: 'mock-user-1',
-        email: 'rohit.sharma@acme-mfg.in',
-        fullName: 'Rohit Sharma',
-        role: 'PLANT_MANAGER',
-        tenantId: 'mock-tenant-1',
-        tenantName: 'Acme Manufacturing Group',
-        plantIds: ['mock-plant-1'],
-      };
+    const raw = await this.request<Parameters<ApiService['mapApiUser']>[0]>('/auth/me');
+    return this.mapApiUser(raw);
+  }
+
+  async requestPasswordReset(email: string): Promise<{
+    message: string;
+    debug_token?: string;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/auth/password-reset/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.detail || `Password reset request failed (HTTP ${response.status})`);
     }
+    return payload as { message: string; debug_token?: string };
+  }
+
+  async completePasswordReset(token: string, newPassword: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/password-reset/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.detail || `Password reset failed (HTTP ${response.status})`);
+    }
+    return payload as { message: string };
+  }
+
+  async acceptInvitation(token: string, password: string): Promise<User> {
+    const response = await fetch(`${API_BASE_URL}/auth/invitations/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || payload?.detail || `Invitation acceptance failed (HTTP ${response.status})`);
+    }
+    return this.mapApiUser(payload);
+  }
+
+  async inviteUser(payload: {
+    email: string;
+    full_name: string;
+    role: string;
+    plant_ids?: string[];
+  }): Promise<{
+    invitation_id: string;
+    email: string;
+    role: string;
+    status: string;
+    delivery_status: string;
+    expires_at: string;
+    invitation_url?: string;
+    debug_token?: string;
+  }> {
+    return await this.request('/auth/users/invite', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   // Plants Endpoints
   async getPlants(): Promise<Plant[]> {
     try {
       return await this.request<Plant[]>('/plants');
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'plant-pune-01',
@@ -145,7 +212,10 @@ class ApiService {
   async getPlantProfile(plantId: string): Promise<PlantProfile> {
     try {
       return await this.request<PlantProfile>(`/plants/${plantId}/profile`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         id: 'profile-1',
         plantId,
@@ -235,7 +305,10 @@ class ApiService {
   async getRegulatorySources(): Promise<RegulatorySource[]> {
     try {
       return await this.request<RegulatorySource[]>('/regulatory/sources');
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'src-mpcb-01',
@@ -355,7 +428,10 @@ class ApiService {
         `/regulatory/sources/${sourceId}/poll?scenario=${encodeURIComponent(scenario)}`,
         { method: 'POST' }
       );
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return this.getRegulatoryChanges();
     }
   }
@@ -364,7 +440,10 @@ class ApiService {
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
     try {
       return await this.request<RegulatoryChangeReview[]>(`/regulatory/changes${query}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'chg-mpcb-2026-01',
@@ -423,7 +502,10 @@ class ApiService {
   async getRegulatoryChangeDetail(changeId: string): Promise<RegulatoryChangeReview> {
     try {
       return await this.request<RegulatoryChangeReview>(`/regulatory/changes/${changeId}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const items = await this.getRegulatoryChanges();
       const match = items.find((i) => i.id === changeId);
       if (match) return match;
@@ -446,7 +528,10 @@ class ApiService {
         method: 'PATCH',
         body: JSON.stringify(payload),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const item = await this.getRegulatoryChangeDetail(changeId);
       return { ...item, ...payload };
     }
@@ -467,7 +552,10 @@ class ApiService {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const item = await this.getRegulatoryChangeDetail(changeId);
       return {
         ...item,
@@ -482,7 +570,10 @@ class ApiService {
   async getRegulatoryChangeImpacts(changeId: string): Promise<RegulatoryChangeImpact[]> {
     try {
       return await this.request<RegulatoryChangeImpact[]>(`/regulatory/changes/${changeId}/impacts`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'imp-01',
@@ -524,7 +615,10 @@ class ApiService {
   async getRegulatoryChangeHistory(changeId: string): Promise<RegulatoryAuditLog[]> {
     try {
       return await this.request<RegulatoryAuditLog[]>(`/regulatory/changes/${changeId}/history`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'aud-01',
@@ -581,7 +675,10 @@ class ApiService {
     const qs = params.toString() ? `?${params.toString()}` : '';
     try {
       return await this.request<ComplianceDocumentItem[]>(`/documents${qs}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       // Fallback mock documents
       return [
         {
@@ -654,7 +751,10 @@ class ApiService {
   async getDocument(documentId: string): Promise<ComplianceDocumentItem> {
     try {
       return await this.request<ComplianceDocumentItem>(`/documents/${documentId}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         id: documentId,
         plant_id: 'mock-plant-1',
@@ -823,7 +923,10 @@ class ApiService {
   async getDocumentHistory(documentId: string): Promise<DocumentAuditLogItem[]> {
     try {
       return await this.request<DocumentAuditLogItem[]>(`/documents/${documentId}/history`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'aud-01',
@@ -872,7 +975,10 @@ class ApiService {
     });
     try {
       return await this.request<PaginatedRequirements>(`/requirements?${query.toString()}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const mockItems: RequirementDetailItem[] = [
         {
           id: 'req-01',
@@ -1033,7 +1139,10 @@ class ApiService {
     const query = plantId ? `?plant_id=${plantId}` : '';
     try {
       return await this.request<SavedViewPreset[]>(`/requirements/saved-views${query}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'all_applicable',
@@ -1063,7 +1172,10 @@ class ApiService {
   async getRequirementDetail(requirementId: string): Promise<RequirementDetailItem> {
     try {
       return await this.request<RequirementDetailItem>(`/requirements/${requirementId}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       const all = await this.getRequirements();
       return all.items.find((r) => r.id === requirementId) || all.items[0];
     }
@@ -1238,7 +1350,10 @@ class ApiService {
         }
       });
       return await this.request<PaginatedReportJobs>(`/reports?${query.toString()}`);
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         items: [
           {
@@ -1285,7 +1400,10 @@ class ApiService {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return {
         id: `rep-job-${Date.now()}`,
         plant_id: payload.plant_id,
@@ -1444,7 +1562,10 @@ class ApiService {
           plant_id: plantId,
         }),
       });
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       // Deterministic fallback explanation
       return {
         rule_id: ruleId,
@@ -1467,7 +1588,10 @@ class ApiService {
   async getAdminUsers(): Promise<User[]> {
     try {
       return await this.request<User[]>('/auth/users');
-    } catch {
+    } catch (error) {
+      // Mock fixtures are local-preview data only. A production compliance
+      // screen must never silently substitute fabricated regulatory records.
+      if (!import.meta.env.DEV) throw error;
       return [
         {
           id: 'user-rohit-01',
@@ -1513,21 +1637,20 @@ class ApiService {
     email: string;
     full_name: string;
     role: string;
-    plant_ids?: string[];
-  }): Promise<User> {
-    const res = await this.request<Record<string, unknown>>('/auth/users/invite', {
+  }): Promise<{
+    invitation_id: string;
+    email: string;
+    role: string;
+    status: string;
+    delivery_status: string;
+    expires_at: string;
+    invitation_url?: string;
+    debug_token?: string;
+  }> {
+    return await this.request('/auth/users/invite', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return {
-      id: String(res.id || `user-${Date.now()}`),
-      email: payload.email,
-      fullName: payload.full_name,
-      role: payload.role as User['role'],
-      tenantId: 'tenant-acme-01',
-      tenantName: 'Acme Manufacturing Group',
-      plantIds: payload.plant_ids || ['plant-pune-01'],
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -1538,90 +1661,26 @@ class ApiService {
     prompt: string,
     plantId: string = 'plant-pune-01'
   ): Promise<AIAssistantMessage> {
-    const lower = prompt.toLowerCase();
+    // Retain the query in the method contract for the future live endpoint.
+    // No local preview branch interprets user prompts as legal advice.
+    void prompt;
 
-    // Check for ambiguous / out-of-scope query for strict uncertainty handling
-    if (lower.includes('tax') || lower.includes('gst') || lower.includes('customs') || lower.includes('100% compliant') || lower.includes('guarantee')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'Statutory Boundary Notice: PlantProof tracks environmental, factory safety, and industrial manufacturing permits (MPCB, DISH, PESO, CPCB). This inquiry touches commercial tax or legal certification outside verified factory statutes. In accordance with the Cardinal Regulatory Rule, PlantProof cannot provide legal guarantees or commercial tax opinions.',
-        timestamp: new Date().toISOString(),
-        uncertainty_flag: true,
-        uncertainty_note: 'Query touches out-of-scope regulatory domain or requests an absolute compliance guarantee.',
-      };
+    if (!import.meta.env.DEV) {
+      throw new Error(
+        'The live regulatory Q&A service is not configured. No source-grounded assistant is currently available in this environment.'
+      );
     }
 
-    if (lower.includes('boiler') || lower.includes('steam')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'Based on the Indian Boilers Act, 1923 and Maharashtra Boiler Rules, your facility operates 2 boilers with 12.5 TPH steam capacity. Boilers require an annual physical hydraulic test conducted by a certified Boiler Inspector from DISH/Chief Inspector of Boilers. Operating a boiler with an expired certificate attracts Section 23 penalties.',
-        timestamp: new Date().toISOString(),
-        citations: [
-          {
-            act: 'The Indian Boilers Act, 1923',
-            section: 'Section 7 & 8 (Certificate of Use & Hydraulic Testing)',
-            gazette_ref: 'Gazette of India, Pt. II, Sec. 1',
-            source_url: 'https://dish.maharashtra.gov.in/boiler-act',
-          },
-        ],
-      };
-    }
-
-    if (lower.includes('cto') || lower.includes('consent') || lower.includes('mpcb') || lower.includes('pollution')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'For RED Category chemical manufacturing in Pune, Maharashtra, Consent to Operate (CTO) is issued under Section 25 of the Water Act, 1974 and Section 21 of the Air Act, 1981 by the Maharashtra Pollution Control Board (MPCB). CTO renewals must be submitted at least 60 days before expiration via the MPCB Maitri portal.',
-        timestamp: new Date().toISOString(),
-        citations: [
-          {
-            act: 'Water (Prevention and Control of Pollution) Act, 1974',
-            section: 'Section 25 (Restrictions on new outlets and new discharges)',
-            gazette_ref: 'Central Act No. 6 of 1974',
-            source_url: 'https://mpcb.gov.in/consent-management',
-          },
-        ],
-      };
-    }
-
-    if (lower.includes('hazardous') || lower.includes('waste')) {
-      return {
-        id: `msg-${Date.now()}`,
-        sender: 'assistant',
-        content:
-          'Under the Hazardous and Other Wastes (Management and Transboundary Movement) Rules, 2016, authorization (Form 2) is required for generation and storage of 45.0 TPA hazardous waste. Form 4 Annual Returns must be filed on or before June 30th of each financial year with MPCB.',
-        timestamp: new Date().toISOString(),
-        citations: [
-          {
-            act: 'Hazardous and Other Wastes Rules, 2016',
-            section: 'Rule 6 & Rule 20 (Authorization & Annual Returns Form 4)',
-            gazette_ref: 'G.S.R. 395(E)',
-            source_url: 'https://cpcb.nic.in/hazardous-waste-rules-2016',
-          },
-        ],
-      };
-    }
-
-    // Default grounded regulatory response
+    // Local preview only. This response deliberately contains no statutory
+    // claims, invented plant facts, or citations.
     return {
-      id: `msg-${Date.now()}`,
+      id: `demo-msg-${Date.now()}`,
       sender: 'assistant',
-      content: `PlantProof Applicability Assessment for ${plantId}: Requirements are deterministically verified against official Central & Maharashtra state gazettes. For this specific inquiry, our active statutory catalogue indicates that factory safety committees are mandated under Section 41G of the Factories Act 1948 once employment exceeds 250 workers.`,
+      content:
+        `Development preview only (facility context: ${plantId}). This chat is not connected to a live AI provider or the verified regulatory catalogue. No compliance conclusion or legal citation has been generated. Do not use this preview for operational decisions.`,
       timestamp: new Date().toISOString(),
-      citations: [
-        {
-          act: 'The Factories Act, 1948',
-          section: 'Section 41G (Workers Participation in Safety Management)',
-          gazette_ref: 'Act No. 63 of 1948',
-          source_url: 'https://labour.gov.in/factories-act',
-        },
-      ],
-      uncertainty_flag: false,
+      uncertainty_flag: true,
+      uncertainty_note: 'Local demonstration response; source-grounded Q&A is not configured.',
     };
   }
 }

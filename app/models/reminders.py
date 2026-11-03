@@ -4,7 +4,7 @@ Reminder and Notification Models for Compliance Tasks & Expiring Obligations
 
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, Text, JSON, UniqueConstraint
+from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, Text, JSON, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import TimestampedModel, utc_now
 
@@ -21,9 +21,22 @@ class ReminderNotification(TimestampedModel):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False, default="IN_APP")  # IN_APP, EMAIL
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="UNREAD", index=True)  # UNREAD, READ, DISMISSED
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="UNREAD", index=True
+    )  # IN_APP: UNREAD, READ, DISMISSED; EMAIL: NOT_APPLICABLE
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Delivery state is independent of the user's in-app read state.
+    delivery_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="PENDING", server_default="PENDING"
+    )  # PENDING, DELIVERED, FAILED
+    delivery_attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    delivery_attempted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivery_error_code: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     dedup_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     metadata_payload: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
@@ -34,6 +47,10 @@ class ReminderNotification(TimestampedModel):
 
     __table_args__ = (
         UniqueConstraint("dedup_key", name="uq_reminder_dedup_key"),
+        CheckConstraint(
+            "delivery_status IN ('PENDING', 'DELIVERED', 'FAILED')",
+            name="ck_reminder_notifications_delivery_status",
+        ),
     )
 
 

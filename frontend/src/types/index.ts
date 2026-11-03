@@ -398,9 +398,14 @@ export interface NotificationItem {
   title: string;
   message: string;
   channel: 'IN_APP' | 'EMAIL';
-  status: 'UNREAD' | 'READ' | 'DISMISSED';
+  status: 'UNREAD' | 'READ' | 'DISMISSED' | 'NOT_APPLICABLE';
   sent_at: string;
   read_at?: string | null;
+  delivery_status: 'PENDING' | 'DELIVERED' | 'FAILED';
+  delivery_attempt_count?: number;
+  delivery_attempted_at?: string | null;
+  delivered_at?: string | null;
+  delivery_error_code?: string | null;
   metadata_payload?: Record<string, unknown>;
 }
 

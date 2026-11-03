@@ -14,6 +14,7 @@ from app.modules.tenant_profile.schemas import (
     PlantProfileResponse,
     PlantProfileUpdate,
     PlantEquipmentResponse,
+    ProfileVerificationRequest,
 )
 from app.modules.tenant_profile.services import (
     verify_plant_access,
@@ -21,6 +22,7 @@ from app.modules.tenant_profile.services import (
     get_or_create_plant_profile,
     update_plant_profile,
     get_plant_equipment,
+    verify_plant_profile,
 )
 
 router = APIRouter(prefix="/plants", tags=["Plants & Company Operational Profiles"])
@@ -71,8 +73,29 @@ def update_plant_operational_profile(
 ):
     """Updates operational profile parameters (requires Admin or Plant Manager role)."""
     plant = verify_plant_access(db, plant_id, current_user)
-    profile = update_plant_profile(db, plant, profile_update)
+    profile = update_plant_profile(db, plant, profile_update, current_user)
     return profile
+
+
+@router.post(
+    "/{plant_id}/profile/verify",
+    response_model=PlantProfileResponse,
+    dependencies=[Depends(require_roles(["ADMIN", "SUPER_ADMIN"]))],
+)
+def verify_plant_operational_profile(
+    plant_id: str,
+    request: ProfileVerificationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Verify a plant profile using maker-checker separation of duties."""
+    plant = verify_plant_access(db, plant_id, current_user)
+    return verify_plant_profile(
+        db,
+        plant,
+        current_user,
+        verification_notes=request.verification_notes,
+    )
 
 
 @router.get("/{plant_id}/equipment", response_model=List[PlantEquipmentResponse])

@@ -29,7 +29,11 @@ from app.modules.documents.safeguards import (
 
 from app.modules.documents.storage import vault_storage
 from app.modules.documents.extractors import DocumentTextExtractor
-from app.modules.documents.ai_service import ai_extractor_provider, DocumentAIExtractionOutput
+from app.modules.documents.ai_service import (
+    ai_extractor_provider,
+    DocumentAIExtractionOutput,
+    DocumentAIUnavailableError,
+)
 
 
 class DocumentProcessingPipeline:
@@ -181,11 +185,12 @@ class DocumentProcessingPipeline:
                 original_filename=doc.original_filename,
             )
 
-            # 4. Clear any previous fields / checks for clean idempotency
+            # 4. Retain prior extraction records. Mark their lifecycle state as
+            # superseded rather than hard-deleting immutable evidence history.
             for old_field in list(doc.extracted_fields):
-                db.delete(old_field)
+                old_field.is_current = False
             for old_check in list(doc.validation_checks):
-                db.delete(old_check)
+                old_check.is_current = False
             db.flush()
 
             # 5. Persist extracted fields
@@ -193,8 +198,11 @@ class DocumentProcessingPipeline:
                 ef = ExtractedField(
                     document_id=doc.id,
                     field_key=f.key,
+                    field_name=f.key,
                     extracted_value=f.value,
-                    confirmed_value=f.value,
+                    # Extraction is not human confirmation. Leave confirmed_value
+                    # NULL until a reviewer explicitly verifies the field.
+                    confirmed_value=None,
                     confidence_score=f.confidence_score,
                     confidence_band=f.confidence_band,
                     source_page=f.source_page,
@@ -202,6 +210,8 @@ class DocumentProcessingPipeline:
                     field_type=f.field_type,
                     is_mandatory=f.is_mandatory,
                     is_overridden=False,
+                    is_verified=False,
+                    is_current=True,
                 )
                 db.add(ef)
 
@@ -212,7 +222,9 @@ class DocumentProcessingPipeline:
                     check_code=c.check_code,
                     check_name=c.check_name,
                     status=c.status,
+                    check_status=c.status,
                     details=c.details,
+                    is_current=True,
                 )
                 db.add(vc)
 
@@ -254,8 +266,16 @@ class DocumentProcessingPipeline:
             doc.extraction_status = "EXTRACTION_FAILED"
             doc.extraction_error = clean_error
             metadata = dict(doc.extracted_metadata or {})
-            metadata["error_category"] = category
-            metadata["provider_mode"] = "FAILED"
+            metadata["error_category"] = (
+                "PROVIDER_NOT_CONFIGURED"
+                if isinstance(e, DocumentAIUnavailableError)
+                else category
+            )
+            metadata["provider_mode"] = (
+                "DISABLED"
+                if isinstance(e, DocumentAIUnavailableError)
+                else "FAILED"
+            )
             doc.extracted_metadata = metadata
             self._record_audit(
                 db=db,

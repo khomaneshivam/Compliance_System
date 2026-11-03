@@ -20,9 +20,9 @@ class ExtractedFieldData(BaseModel):
 
 
 class ValidationCheckData(BaseModel):
-    check_code: str
+    check_code: Optional[str] = None
     check_name: str
-    status: str  # PASSED, FAILED, WARNING
+    status: Optional[str] = None  # PASSED, FAILED, WARNING
     details: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,11 +45,11 @@ class DocumentAIExtractionOutput(BaseModel):
 
 class ExtractedFieldResponse(BaseModel):
     id: str
-    field_key: str
-    extracted_value: str
-    confirmed_value: str
+    field_key: Optional[str] = None
+    extracted_value: Optional[str] = None
+    confirmed_value: Optional[str] = None
     confidence_score: float
-    confidence_band: str
+    confidence_band: Optional[str] = None
     source_page: Optional[int] = None
     source_snippet: Optional[str] = None
     field_type: str
