@@ -18,15 +18,10 @@ export const AIAssistantPage: React.FC = () => {
       id: 'msg-initial',
       sender: 'assistant',
       content:
-        'Welcome to the PlantProof Regulatory Intelligence & Research Bench. I can cite governing sections of the Factories Act 1948, Water & Air Acts, Indian Boilers Act 1923, and Hazardous Waste Rules 2016 for your Pune facility.',
+        'The regulatory Q&A interface is a preview. A live, source-grounded assistant is not configured in this environment. Do not use this screen for legal conclusions, applicability decisions, or compliance sign-off.',
       timestamp: new Date().toISOString(),
-      citations: [
-        {
-          act: 'The Factories Act, 1948',
-          section: 'Section 41G & Chapter IV (Safety)',
-          source_url: 'https://dish.maharashtra.gov.in',
-        },
-      ],
+      uncertainty_flag: true,
+      uncertainty_note: 'No live regulatory assistant provider is registered.',
     },
   ]);
   const [input, setInput] = useState<string>('');
@@ -50,13 +45,13 @@ export const AIAssistantPage: React.FC = () => {
     try {
       const response = await api.queryAIAssistant(text.trim(), 'plant-pune-01');
       setMessages((prev) => [...prev, response]);
-    } catch {
+    } catch (err: unknown) {
       setMessages((prev) => [
         ...prev,
         {
           id: `msg-${Date.now()}`,
           sender: 'assistant',
-          content: 'Unable to reach the regulatory inference service. Please check your network connection.',
+          content: err instanceof Error ? err.message : 'The regulatory assistant is unavailable.',
           timestamp: new Date().toISOString(),
           uncertainty_flag: true,
         },
@@ -90,7 +85,7 @@ export const AIAssistantPage: React.FC = () => {
           </h1>
         </div>
         <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
-          Direct grounded Q&A with Indian manufacturing statutory codes. Cites official gazette references and flags legal uncertainties.
+          Preview interface only. Live source-grounded regulatory Q&A is not currently configured.
         </p>
       </div>
 

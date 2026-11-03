@@ -2,7 +2,7 @@
 Plant & Company Profile Pydantic Schemas
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
@@ -21,19 +21,23 @@ class PlantSummary(BaseModel):
 class PlantProfileResponse(BaseModel):
     id: str
     plant_id: str
-    industry_category: str
-    sector: str
-    employee_count: int
-    contract_labour_count: int
-    built_up_area_sqm: float
-    capital_investment_inr: float
-    connected_power_kw: float
-    dg_set_capacity_kva: float
-    hazardous_waste_tpa: float
-    effluent_discharge_kld: float
-    boiler_count: int
-    steam_capacity_tph: float
+    industry_category: Optional[str] = None
+    sector: Optional[str] = None
+    employee_count: Optional[int] = None
+    contract_labour_count: Optional[int] = None
+    built_up_area_sqm: Optional[float] = None
+    capital_investment_inr: Optional[float] = None
+    connected_power_kw: Optional[float] = None
+    dg_set_capacity_kva: Optional[float] = None
+    hazardous_waste_tpa: Optional[float] = None
+    effluent_discharge_kld: Optional[float] = None
+    boiler_count: Optional[int] = None
+    steam_capacity_tph: Optional[float] = None
     raw_attributes: Dict[str, Any] = {}
+    profile_status: str
+    verified_by_user_id: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    verification_notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -54,12 +58,16 @@ class PlantProfileUpdate(BaseModel):
     raw_attributes: Optional[Dict[str, Any]] = None
 
 
+class ProfileVerificationRequest(BaseModel):
+    verification_notes: Optional[str] = Field(None, max_length=2000)
+
+
 class PlantEquipmentResponse(BaseModel):
     id: str
     plant_id: str
     equipment_type: str
     tag_number: str
-    capacity: str
+    capacity: Optional[str] = None
     manufacturer: Optional[str] = None
     installation_date: Optional[date] = None
 

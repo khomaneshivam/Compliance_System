@@ -10,8 +10,16 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, isAuthenticated, hasRole, switchRole } = useAuth();
+  const { user, isAuthenticated, isLoading, hasRole, switchRole } = useAuth();
   const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div role="status" aria-live="polite" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#475569' }}>
+        Verifying session…
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
@@ -70,21 +78,22 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
             <span>Return to Dashboard</span>
           </Link>
 
-          {/* Quick Demo Switcher helper */}
-          <button
-            onClick={() => switchRole(allowedRoles[0])}
-            className="btn btn-primary"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: '#059669',
-              borderColor: '#059669',
-            }}
-          >
-            <UserCheck size={14} />
-            <span>Switch Role to {allowedRoles[0]} (Demo)</span>
-          </button>
+          {import.meta.env.DEV && (
+            <button
+              onClick={() => switchRole(allowedRoles[0])}
+              className="btn btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#059669',
+                borderColor: '#059669',
+              }}
+            >
+              <UserCheck size={14} />
+              <span>Switch Role to {allowedRoles[0]} (Demo)</span>
+            </button>
+          )}
         </div>
       </div>
     );

@@ -12,6 +12,7 @@ from datetime import date, datetime, timezone
 import pytest
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from app.core.database import SessionLocal
 from app.core.exceptions import EntityNotFoundError, ImmutableRecordError
@@ -37,6 +38,27 @@ from app.modules.applicability.schemas import (
 )
 from app.modules.requirements.services import RequirementsService
 from app.seed.demo_data import seed_master_data
+
+def test_rule_authors_cannot_self_declare_source_verified():
+    """Source authenticity verification must be independent from rule authoring/approval."""
+    with pytest.raises(ValidationError, match="cannot mark a regulatory source VERIFIED"):
+        RuleCreateRequest(
+            statutory_requirement_code="MPCB-CTO",
+            expression_ast={"field": "effluent_discharge_kld", "operator": "gt", "value": 10},
+            pass_explanation_template="Applies",
+            fail_explanation_template="Does not apply",
+            source_verification_status="VERIFIED",
+        )
+
+    with pytest.raises(ValidationError, match="cannot mark a regulatory source VERIFIED"):
+        RuleSupersedeRequest(
+            new_expression_ast={"field": "effluent_discharge_kld", "operator": "gt", "value": 5},
+            pass_explanation_template="Applies",
+            fail_explanation_template="Does not apply",
+            change_rationale="Rule interpretation updated",
+            source_verification_status="VERIFIED",
+        )
+
 
 
 @pytest.fixture(scope="module")
@@ -142,7 +164,8 @@ def test_rule_approval_enforces_immutability_and_supersedes_prior(db_session: Se
     assert approved.is_immutable is True
     assert approved.approved_by_user_id == admin_user.id
     assert approved.approved_at is not None
-    assert approved.source_verification_status == "VERIFIED"
+    # Rule approval is not proof that the cited legal source was independently verified.
+    assert approved.source_verification_status == "PROPOSED"
 
     # Prior active rule must now be SUPERSEDED
     db_session.refresh(prior_active)
@@ -237,6 +260,7 @@ def test_unapproved_rules_are_never_evaluated(db_session: Session, admin_user: U
 
         profile = PlantProfile(
             plant_id=plant.id,
+            profile_status="DEMO_FIXTURE",
             industry_category="RED",
             boiler_count=2,
             steam_capacity_tph=12.0,
@@ -325,6 +349,51 @@ def test_statutory_provenance_and_finding_trace_in_detail_service(db_session: Se
     assert detail is not None
     assert detail.provenance is not None
     assert detail.provenance.act_title is not None
-    assert detail.provenance.source_verification_status in ("VERIFIED", "UNVERIFIED_DEMO")
+    assert detail.provenance.source_verification_status == "PROPOSED"
     assert detail.applicability is not None
     assert detail.applicability.rule_version >= 1
+
+
+
+def test_requirement_detail_does_not_invent_legal_provenance(db_session: Session, admin_user: User):
+    """Missing legal citations remain absent; no inferred clause, Gazette number or URL is emitted."""
+    from app.models.requirements import PlantRequirement
+
+    tenant = db_session.get(Tenant, admin_user.tenant_id)
+    requirement = db_session.scalars(
+        select(StatutoryRequirement).where(StatutoryRequirement.code == "MPCB-CTO")
+    ).first()
+    assert tenant is not None
+    assert requirement is not None
+
+    plant = Plant(
+        tenant_id=tenant.id,
+        name="Provenance Missing-Source Test Plant",
+        code="MH-PROV-MISSING-01",
+        jurisdiction="Maharashtra",
+        district="Pune",
+        pincode="411001",
+    )
+    db_session.add(plant)
+    db_session.flush()
+
+    plant_requirement = PlantRequirement(
+        plant_id=plant.id,
+        statutory_requirement_id=requirement.id,
+        rule_version_id=None,
+        applicability_status="NEEDS_REVIEW",
+        applicability_rationale="Test record without a published source reference.",
+        evidence_status="MISSING",
+    )
+    db_session.add(plant_requirement)
+    db_session.flush()
+
+    detail = RequirementsService().get_requirement_detail(
+        db_session, admin_user, plant_requirement.id
+    )
+
+    assert detail.provenance is not None
+    assert detail.provenance.section_clause is None
+    assert detail.provenance.gazette_reference is None
+    assert detail.provenance.official_source_url is None
+    assert detail.provenance.is_verified is False

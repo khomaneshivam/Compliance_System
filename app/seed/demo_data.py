@@ -118,6 +118,7 @@ def seed_master_data(db: Session) -> Dict[str, Any]:
             auth = RegulatoryAuthority(
                 code=code,
                 name=name,
+                jurisdiction=level,
                 jurisdiction_level=level,
                 jurisdiction_id=j_id,
                 website_url=url
@@ -329,6 +330,7 @@ def seed_demo_fixtures(db: Session) -> Dict[str, Any]:
     if not prof_a:
         prof_a = PlantProfile(
             plant_id=plant_a.id,
+            profile_status="DEMO_FIXTURE",
             industry_category="RED",
             sector="Chemicals & Manufacturing",
             employee_count=150,

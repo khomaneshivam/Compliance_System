@@ -124,6 +124,6 @@ def send_test_notification_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Dispatches a test notification through the test adapter for verification and auditing.
+    Creates an in-app test notification or exercises the configured email delivery adapter.
     """
     return reminder_service.send_test_notification(db=db, user=current_user, payload=payload)

@@ -131,6 +131,7 @@ class TaskService:
                 raise EntityNotFoundError("PlantRequirement", payload.plant_requirement_id)
 
         task = ComplianceTask(
+            tenant_id=plant.tenant_id,
             plant_id=plant.id,
             plant_requirement_id=payload.plant_requirement_id,
             title=payload.title,

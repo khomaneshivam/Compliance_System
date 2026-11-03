@@ -71,6 +71,7 @@ export const DEMO_USERS: User[] = [
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   activePlantId: string;
   login: (email: string, password?: string) => Promise<boolean>;
   logout: () => void;
@@ -84,16 +85,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
+    // Demo identities are a development-only preview feature. Production must
+    // begin unauthenticated and restore identity from the signed backend token.
+    if (!import.meta.env.DEV) return null;
     const saved = localStorage.getItem('plantproof_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return JSON.parse(saved) as User;
       } catch {
-        return DEMO_USERS[0];
+        localStorage.removeItem('plantproof_user');
       }
     }
-    return DEMO_USERS[0]; // default to Amit Jadhav (Admin)
+    return DEMO_USERS[0];
   });
+  const [isLoading, setIsLoading] = useState<boolean>(() => !import.meta.env.DEV && !!api.getToken?.());
 
   const [activePlantId, setActivePlantId] = useState<string>(() => {
     return localStorage.getItem('plantproof_active_plant') || 'plant-pune-01';
@@ -108,52 +113,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   useEffect(() => {
+    const token = api.getToken?.();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    if (import.meta.env.DEV && token.startsWith('demo-jwt-token-for-')) {
+      setIsLoading(false);
+      return;
+    }
+
+    let active = true;
+    setIsLoading(true);
+    api.getCurrentUser()
+      .then((currentUser) => {
+        if (active) setUser(currentUser);
+      })
+      .catch(() => {
+        if (active) {
+          api.setToken?.(null);
+          setUser(null);
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('plantproof_active_plant', activePlantId);
   }, [activePlantId]);
 
   const login = async (email: string, password?: string): Promise<boolean> => {
-    if (password === 'WrongPassword123!' || email.toLowerCase().includes('invalid')) {
-      throw new Error('Invalid email or password. Please verify your credentials and try again.');
-    }
-    const matched = DEMO_USERS.find(
-      (u) => u.email.toLowerCase() === email.trim().toLowerCase()
-    );
-    if (matched) {
-      setUser(matched);
-      api.setToken(`demo-jwt-token-for-${matched.id}`);
-      return true;
-    }
-    // Generic login fallback
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      email: email.trim(),
-      fullName: email.split('@')[0].replace(/[._]/g, ' '),
-      role: email.toLowerCase().includes('admin') ? 'ADMIN' : 'PLANT_MANAGER',
-      tenantId: 'tenant-acme-01',
-      tenantName: 'Acme Manufacturing Group',
-      plantIds: ['plant-pune-01'],
-    };
-    setUser(newUser);
-    api.setToken(`demo-jwt-token-for-${newUser.id}`);
+    if (!password) throw new Error('Password is required.');
+    const authenticated = await api.login(email, password);
+    setUser(authenticated.user);
+    setActivePlantId(authenticated.user.plantIds[0] || '');
     return true;
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('plantproof_user');
+    api.setToken(null);
     localStorage.removeItem('plantproof_token');
   };
 
   const switchRole = (newRole: Role) => {
-    if (!user) return;
+    if (!import.meta.env.DEV || !user) return;
     setUser({ ...user, role: newRole });
   };
 
   const switchUser = (userId: string) => {
+    if (!import.meta.env.DEV) return;
     const target = DEMO_USERS.find((u) => u.id === userId);
     if (target) {
       setUser(target);
-      api.setToken(`demo-jwt-token-for-${target.id}`);
+      api.setToken?.(`demo-jwt-token-for-${target.id}`);
     }
   };
 
@@ -172,6 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         isAuthenticated: !!user,
+        isLoading,
         activePlantId,
         login,
         logout,

@@ -15,9 +15,17 @@ if TYPE_CHECKING:
 class RegulatoryAuthority(TimestampedModel):
     __tablename__ = "regulatory_authorities"
     
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    jurisdiction_level: Mapped[str] = mapped_column(String(20), nullable=False, default="STATE")  # CENTRAL, STATE, LOCAL
+
+    # Legacy columns retained for backward compatibility with the initial schema.
+    # Do not drop these until existing values are reconciled and archived.
+    jurisdiction: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    jurisdiction_level: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="STATE", server_default="STATE"
+    )  # CENTRAL, STATE, LOCAL
     jurisdiction_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("jurisdictions.id", ondelete="SET NULL"), nullable=True)
     website_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
@@ -29,6 +37,10 @@ class RegulatoryAct(TimestampedModel):
     __tablename__ = "regulatory_acts"
     
     authority_id: Mapped[str] = mapped_column(String(36), ForeignKey("regulatory_authorities.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Legacy act metadata is retained during the transition from the initial schema.
+    code: Mapped[Optional[str]] = mapped_column(String(50), unique=True, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enactment_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str] = mapped_column(String(100), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -43,12 +55,21 @@ class StatutoryRequirement(TimestampedModel):
     __tablename__ = "statutory_requirements"
     
     act_id: Mapped[str] = mapped_column(String(36), ForeignKey("regulatory_acts.id", ondelete="CASCADE"), nullable=False, index=True)
-    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    # Retained legacy statutory fields: keep their values through model/schema transitions.
+    plain_language_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    statutory_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    penalty_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    standard_validity_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     obligation_type: Mapped[str] = mapped_column(String(50), nullable=False)  # LICENCE, CONSENT, CERTIFICATE, REGISTRATION, RETURN
-    validity_period_months: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
-    grace_period_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    validity_period_months: Mapped[int] = mapped_column(
+        Integer, default=12, server_default="12", nullable=False
+    )
+    grace_period_days: Mapped[int] = mapped_column(
+        Integer, default=30, server_default="30", nullable=False
+    )
     
     # Relationships
     act: Mapped["RegulatoryAct"] = relationship("RegulatoryAct", back_populates="requirements")
@@ -64,6 +85,10 @@ class ApplicabilityRule(TimestampedModel):
     
     statutory_requirement_id: Mapped[str] = mapped_column(String(36), ForeignKey("statutory_requirements.id", ondelete="CASCADE"), nullable=False, index=True)
     rule_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Legacy fields retained as nullable after normalization. Existing rows keep
+    # their original JSON/rationale; new rows write the normalized fields below.
+    rule_logic: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    rationale_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     expression_ast: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     pass_explanation_template: Mapped[str] = mapped_column(Text, nullable=False)
     fail_explanation_template: Mapped[str] = mapped_column(Text, nullable=False)

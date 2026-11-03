@@ -227,6 +227,7 @@ def test_four_domain_reminder_scan_and_deduplication(test_db_session: Session, r
 
     # 1. Setup Task: Due in 5 days (Due-soon)
     task = ComplianceTask(
+        tenant_id=tenant.id,
         plant_id=plant.id,
         title="Conduct Stack Emission Monitoring",
         description="Monitor flue gas emissions for DG set.",
