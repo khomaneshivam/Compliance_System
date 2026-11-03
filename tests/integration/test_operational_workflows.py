@@ -273,7 +273,7 @@ def test_reminders_scheduler_deduplication_and_test_adapter(
         assert data2["deduplicated_count"] >= first_gen
         assert data2["generated_count"] == 0
 
-    # 4. Dispatch a test notification through test adapter
+    # 4. In-app notifications are delivered by persistence, not the email adapter.
     test_resp = client.post(
         "/api/v1/reminders/test-notification",
         headers=auth_headers_tenant_a,
@@ -288,11 +288,33 @@ def test_reminders_scheduler_deduplication_and_test_adapter(
     notif = test_resp.json()
     assert notif["title"] == "Alert Pipeline Test"
     assert notif["status"] == "UNREAD"
+    assert notif["delivery_status"] == "DELIVERED"
+    assert notif["delivered_at"] is not None
 
-    # Assert test adapter recorded delivery
+    # 5. Email notifications exercise the configured delivery adapter and persist
+    # the delivery result separately from the in-app read state.
+    email_resp = client.post(
+        "/api/v1/reminders/test-notification",
+        headers=auth_headers_tenant_a,
+        json={
+            "channel": "EMAIL",
+            "notification_type": "SYSTEM_TEST",
+            "title": "Alert Email Pipeline Test",
+            "message": "Verification email confirming the configured delivery adapter.",
+        },
+    )
+    assert email_resp.status_code == 201
+    email_notif = email_resp.json()
+    assert email_notif["channel"] == "EMAIL"
+    assert email_notif["status"] == "NOT_APPLICABLE"
+    assert email_notif["delivery_status"] == "DELIVERED"
+    assert email_notif["delivery_attempt_count"] == 1
+    assert email_notif["delivered_at"] is not None
+
     assert len(test_notification_adapter.delivered_messages) > 0
     delivered = test_notification_adapter.delivered_messages[-1]
-    assert delivered["title"] == "Alert Pipeline Test"
+    assert delivered["title"] == "Alert Email Pipeline Test"
+    assert delivered["channel"] == "EMAIL"
 
     # 5. List notifications and verify unread count
     list_resp = client.get("/api/v1/reminders/notifications", headers=auth_headers_tenant_a)
